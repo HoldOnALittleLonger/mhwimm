@@ -1,0 +1,81 @@
+                                              Monster Hunter World:Iceborne Mod Manager Command Line Tool
+
+Why am I write this application?
+        Just interesting.
+
+User Interface :
+        > mhwimmc
+        mhwimmc: Monster Hunter World:Iceborne Mod Manager
+        mhwimmc: cd [ path ]
+        mhwimmc: ls
+        mhwimmc:
+                file
+                file
+                ...
+        mhwimmc: install [ mod name ] [ mod path | mod full path]
+        mhwimmc: uninstall [ mod name ]
+        mhwimmc: installed
+                <mod name> <mod path> <date>
+                ...
+        mhwimmc: set-game-root [ path ]
+
+Mod records :
+        sqlite table records.
+        [ MOD NAME ] [ MOD PATH ] [ DATE ]
+        <mod name>   <mod path>   <date>
+
+Modules :
+        [ UI Module ]
+        [ Command Module ]
+        [ Record Module ]
+        [ Config Module ]
+
+    UI Module :
+            print console messages
+    Command Module :
+            read command from user and handles it
+    Record Module :
+            update data base
+    Config Module :
+            records some paths
+
+Config file :
+        USERHOME => the user's home who first initialized this application
+        MHWIROOT => root directory of Monster Hunter World:Iceborne
+        MHWIMMCROOT => root directory of mhwimmc
+        RECORDSFILE => file name of the file records mod installing info
+
+Threaded :
+        three threads >
+                1> UI Module
+                2> Command Module
+                3> Record Module and Config Module
+        ! all threads are non-detach
+
+        thread IPC >
+                mutex :
+                  1> mutex UICmd_mutex for synchronization between UI and Command
+                  2> muex CmdRecord_mutex for synchronization between Command and Record
+                process memory space :
+                  1> UI input and Command output buffer
+                     - char memory buffer
+                  2> Install/Uninstall record buffer
+                     - 
+                       struct table record {
+                               database op
+                               mod name
+                               mod install path
+                               install date
+                       }
+
+Development Environment :
+        Language >
+                C and C++
+        Compiler >
+                gcc 10.3.0 and g++ 10.3.0
+        GNU/libc >
+                glibc 2.31
+        Linux >
+                linux 5.4.32
+        Sqlite >
+                sqlite 3
