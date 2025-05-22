@@ -9,20 +9,29 @@ void mhwimmc_ui_thread_worker(mhwimmc_ui &mmcui, struct ucmsgexchg *ucme)
 
   for (; ;) {
     /* command event cycle */
-    mmcui.printMessage(std::string{"\n"});
+    mmcui.newLine();
 
-    progexit_spinlock.lock();
-    if (program_exit) {
-      progexit_spinlock.unlock();
+    /**
+     * we do not need concurrent reading protection for this
+     * indicator.
+     * only several cases the state of indicator will change :
+     *   exit command
+     *     when Command module is working,UI module would be blocked
+     *     until the mutex released
+     *   SIGINT
+     *   SIGTERM
+     *     when signal action hander is working,the program is prepare
+     *     switch back to User Mode,but before signal action handler
+     *     finished,no thread can resume executing
+     */
+    if (program_exit)
       break;
-    }
-    progexit_spinlock.unlock();
 
     mmcui.printPrompt();
 
     ssize_t ret(mmcui.readFromUser());
     if (ret < 0) {
-      mmcui.printMessage(std::string{"Failed to read cmd input!\n"});
+      mmcui.printMessage(std::string{"Failed to read cmd input!"});
       continue;
     }
 
@@ -36,16 +45,17 @@ void mhwimmc_ui_thread_worker(mhwimmc_ui &mmcui, struct ucmsgexchg *ucme)
     while (1) {
       uitw_unique_lock.lock();
 
-      if (ucme->status) {
-        mmcui.printMessage(ucme->io_buf);
+      mmcui.newLine();
+      mmcui.printIndentSpaces();
+      mmcui.printMessage(ucme->io_buf);
+
+      if (ucme->status)
         break;
-      }
-      else
-        mmcui.printMesage(ucme->io_buf);
-        
+
       uitw_unique_lock.unlock();
     }
   }
 
   mmcui.printMessage(std::string{"Program exiting."});
+  mmcui.newLine();
 }

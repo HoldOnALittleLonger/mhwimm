@@ -17,6 +17,7 @@ User Interface :
         mhwimmc: installed
                 <mod name> <mod path> <date>
                 ...
+        mhwimmc: exit
 
 Mod records :
         sqlite table records.
@@ -29,17 +30,50 @@ Modules :
         [ Database Module ]
 
     UI Module :
-            print console messages
-    Command Module :
-            read command from user and handles it
-    Database Module :
-            update data base
+            UI module handles console message printing and read user input,send the
+            input to Command Module
 
-Config file :
+    Command Module :
+            Command module receives the input from UI module,parses and process
+            the corresponding functions,send command output back to UI module
+            Command module also have to take charge of database control,if the command
+            install/uninstall a mod,the corresponding database record term must be
+            added or removed
+
+    Database Module :
+            Database module primaryly handles the database operations
+            if Command module need to modify database or retrieve some records,
+            it send a message to this module,and thus this module must responses
+            the request from Command module
+
+Commands :
+        cd => change current work directory
+                cd [ path ]
+        ls => list current directory
+                ls
+        install => install a mod
+                install [ mod name ] [ mod path ]
+                /* mod must not be compressed */
+        uninstall => uninstall a mod
+                uninstall [ mod name ]
+        installed => print all installed mods
+                installed
+        config => modify a config term
+                config [ key ]=[ value ]
+                @value: string value
+                config without key=value prints all config term
+                /* value unspecified config term will has the value "nil" */
+        exit => exit program
+
+Config :
         USERHOME => the user's home who first initialized this application
         MHWIROOT => root directory of Monster Hunter World:Iceborne
         MHWIMMCROOT => root directory of mhwimmc
         RECORDSFILE => file name of the file records mod installing info
+
+Config handling :
+        Command module have to handles program config
+        the command "config" is used to modify a config term
 
 Threaded :
         three threads >
@@ -67,6 +101,14 @@ Threaded :
                                mod install path
                                install date
                        } cdbmsgexchg
+
+Program exit :
+        a global indicator named @program_exit is introduced for tell each threads
+        should stop and exit
+
+Signals :
+        SIGINT => set @program_exit to TRUE
+        SIGTERM => set @program_exit to TRUE
 
 Development Environment :
         Language >

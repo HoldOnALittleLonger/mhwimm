@@ -57,25 +57,6 @@ extern std::mutex ucmutex;
 /* cdbmutex - mutex used to make synchronization between CMD and DB */
 extern std::mutex cdbmutex;
 
-class spinlock {
-public:
-  void lock(void)
-  {
-    while (atomic_.test_and_set(std::memory_order_acquire));
-  }
-  
-  void unlock(void)
-  {
-    atomic_.clear(std::memory_order_release);
-  }
-
-private:
-  std::atomic_flag atomic_ = ATOMIC_FLAG_INIT;
-};
-
-/* progexit_spinlock - spinlock object used to protect @program_exit indicator */
-extern spinlock progexit_spinlock;
-
 /* program_exit - boolean value used to indicates whether the program should stop */
 extern bool program_exit;
 

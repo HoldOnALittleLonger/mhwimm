@@ -12,7 +12,8 @@ namespace UI {
     mhwimmc_ui() :
       local_msg_buffer_("nil"),
       prompt_msg_("mhwimmc: "),
-      startup_msg_("Monster Hunter World:Iceborne Mod Manager cmd tool")
+      startup_msg_("Monster Hunter World:Iceborne Mod Manager cmd tool"),
+      space_indent_(8)
         {}
 
     mhwimmc_ui(const mhwimmc_ui &) =delete;
@@ -59,6 +60,21 @@ namespace UI {
     {
       des = local_msg_buffer_;
     }
+
+    void printIndentSpaces(void)
+    {
+      auto x(space_indent_);
+      do {
+        std::cout.put(' ');
+      } while (--x);
+      std::cout << flush;
+    }
+
+    void newLine(void)
+    {
+      std::cout << std::endl;
+    }
+
   private:
     /* local_msg_buffer_ - temporary local message buffer */
     std::string_view local_msg_buffer_;
@@ -68,6 +84,8 @@ namespace UI {
 
     /* startup_msg_ - the message will be print when program is startup */
     const std::string_view startup_msg_;
+
+    const unsigned short space_indent_;
   };
 
 }
