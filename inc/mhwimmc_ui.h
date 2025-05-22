@@ -1,51 +1,76 @@
 #ifndef _MHWIMMC_UI_H_
 #define _MHWIMMC_UI_H_
 
+#include <iostream>
 #include <string>
 #include <cstddef>
 
-class mhwimmc_ui finally {
-public:
-  mhwimmc_ui() : local_msg_buffer_("nil"), prompt_msg_("mhwimmc: ") {}
+namespace UI {
 
-  mhwimmc_ui(const mhwimmc_ui &) =delete;
-  mhwimmc_ui(mhwimmc_ui &&) =delete;
-  mhwimmc_ui &operator=(const mhwimmc_ui &) =delete;
-  mhwimmc_ui &operator=(mhwimmc_ui &&) =delete;
+  class mhwimmc_ui finally {
+  public:
+    mhwimmc_ui() :
+      local_msg_buffer_("nil"),
+      prompt_msg_("mhwimmc: "),
+      startup_msg_("Monster Hunter World:Iceborne Mod Manager cmd tool")
+        {}
 
-  /**
-   * printPrompt - print prompt message on the console
-   * # thread function should invokes this member method to tell user
-   *   that next command cycle have been started
-   */
-  void printPrompt(void);
+    mhwimmc_ui(const mhwimmc_ui &) =delete;
+    mhwimmc_ui(mhwimmc_ui &&) =delete;
+    mhwimmc_ui &operator=(const mhwimmc_ui &) =delete;
+    mhwimmc_ui &operator=(mhwimmc_ui &&) =delete;
 
-  /**
-   * printMessage - print message on the console
-   * @msg:          referrence to std::string object which holds the
-   *                message from Command Module
-   */
-  void printMessage(std::string &msg);
+    /**
+     * printPrompt - print prompt message on the console
+     * # thread function should invokes this member method to tell user
+     *   that next command cycle have been started
+     */
+    void printPrompt(void)
+    {
+            std::cout<< prompt_msg_ << flush;
+    }
+    void printStartupMsg(void)
+    {
+      printPrompt();
+      std::cout << startup_msg_ << flush;
+    }
 
-  /**
-   * readFromUser - read user input from standard input stream
-   * return:        size of characters this routine have been readed
-   */
-  ssize_t readFromUser(void);
+    /**
+     * printMessage - print message on the console
+     * @msg:          referrence to std::string object which holds the
+     *                message from Command Module
+     */
+    void printMessage(std::string &msg)
+    {
+            std::cout<< msg << flush;
+    }
 
-  /**
-   * sendCMDTo - send command readed from user to the destination
-   * @des:       where to place
-   * return:     size of characters have been sent
-   */
-  ssize_t sendCMDTo(std::string &des);
-private:
-  /* local_msg_buffer_ - temporary local message buffer */
-  std::string_view local_msg_buffer_;
+    /**
+     * readFromUser - read user input from standard input stream
+     * return:        size of characters this routine have been readed
+     */
+    ssize_t readFromUser(void);
+
+    /**
+     * sendCMDTo - send command readed from user to the destination
+     * @des:       where to place
+     */
+    void sendCMDTo(std::string &des)
+    {
+      des = local_msg_buffer_;
+    }
+  private:
+    /* local_msg_buffer_ - temporary local message buffer */
+    std::string_view local_msg_buffer_;
   
-  /* prompt_msg_ - a constant object to stores prompt message */
-  const std::string_view prompt_msg_;
-};
+    /* prompt_msg_ - a constant object to stores prompt message */
+    const std::string_view prompt_msg_;
+
+    /* startup_msg_ - the message will be print when program is startup */
+    const std::string_view startup_msg_;
+  };
+
+}
 
 
 #endif

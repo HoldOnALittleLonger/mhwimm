@@ -17,7 +17,6 @@ User Interface :
         mhwimmc: installed
                 <mod name> <mod path> <date>
                 ...
-        mhwimmc: set-game-root [ path ]
 
 Mod records :
         sqlite table records.
@@ -27,17 +26,14 @@ Mod records :
 Modules :
         [ UI Module ]
         [ Command Module ]
-        [ Record Module ]
-        [ Config Module ]
+        [ Database Module ]
 
     UI Module :
             print console messages
     Command Module :
             read command from user and handles it
-    Record Module :
+    Database Module :
             update data base
-    Config Module :
-            records some paths
 
 Config file :
         USERHOME => the user's home who first initialized this application
@@ -49,24 +45,28 @@ Threaded :
         three threads >
                 1> UI Module
                 2> Command Module
-                3> Record Module and Config Module
+                3> Database Module
         ! all threads are non-detach
 
-        thread IPC >
+        thread synchronization >
                 mutex :
-                  1> mutex UICmd_mutex for synchronization between UI and Command
-                  2> muex CmdRecord_mutex for synchronization between Command and Record
+                  1> mutex @ucmutex for synchronization between UI and Command
+                  2> mutex @cdbmutex for synchronization between Command and Database
                 process memory space :
-                  1> UI input and Command output buffer
-                     - char memory buffer
-                  2> Install/Uninstall record buffer
+                  1> UI input and Command msg buffer
+                     - 
+                       struct uc_msg_exchange {
+                               status_code
+                               io_buffer
+                       } ucmsgexchg
+                  2> Command and Database msg buffer
                      - 
                        struct table record {
                                database op
                                mod name
                                mod install path
                                install date
-                       }
+                       } cdbmsgexchg
 
 Development Environment :
         Language >
