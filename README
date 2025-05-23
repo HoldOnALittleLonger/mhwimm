@@ -69,7 +69,6 @@ Config :
         USERHOME => the user's home who first initialized this application
         MHWIROOT => root directory of Monster Hunter World:Iceborne
         MHWIMMCROOT => root directory of mhwimmc
-        RECORDSFILE => file name of the file records mod installing info
 
 Config handling :
         Command module have to handles program config
