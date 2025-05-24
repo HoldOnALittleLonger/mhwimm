@@ -8,7 +8,7 @@
 
 struct sqlite3;
 
-namespace CMD {
+namespace mhwimmc_cmd_ns {
 
   enum class cmd {
     CD,
@@ -77,6 +77,13 @@ namespace CMD {
     int installed(void);
     int config(void);
     int exit(void);
+
+    void generic_err_msg_output(const std::string &err_msg)
+    {
+      cmd_output_infos_[0] = err_msg;
+      noutput_infos_ = 1;
+      is_cmd_has_output_ = true;
+    }
 
     sqlite3 *db_handler_;
     struct config_struct *conf_;

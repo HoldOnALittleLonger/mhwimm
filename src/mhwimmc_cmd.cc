@@ -6,13 +6,18 @@
 
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <dirent.h>
-
-
+#include <errno.h>
 
 extern bool program_exit;
 
-namespace CMD {
+namespace mhwimmc_cmd_ns {
+
+#define ERROR_MSG_MEM "error: Failed to allocate memory."
+#define ERROR_MSG_INCFORM "error: Incorrect format."
+#define ERROR_MSG_UNKNOWN " error: Unknown error."
+#define ERROR_MSG_FNOEXIST "error: No such file or directory."
 
   static calculate_key(const char *cmd_str) -> int32_t
   {
@@ -33,7 +38,7 @@ namespace CMD {
     try {
       cmd_tmp_buf = new char[buf_length];
     } catch (std::bad_alloc &err) {
-      cmd_output_buffer_ = "error: failed to allocate buffer memory.";
+      generic_err_msg_output(ERROR_MSG_MEM);
       current_status_ = ERROR;
       return -1;
     }
@@ -205,16 +210,16 @@ namespace CMD {
     check_if_correct_format();
 
     if (!is_correct) {
+      generic_err_msg_output(ERROR_MSG_INCFORM);
       current_status_ = ERROR;
-      cmd_output_infos_[0] = std::string{"error: incorrect format."};
-      noutput_infos_ = 1;
-      is_cmd_has_output_ = true;
       return -1;
     }
 
-    std::string key(parameters_[0].substr(0, equal_pos - parameters_[0].begin() - 1));
-    std::string value(parameters_[0].substr(equal_pos - parameters_[0].begin() + 1,
-                                            parameters_[0].end() - equal_pos));
+    config_skey_t key(
+                      parameters_[0].substr(0, equal_pos - parameters_[0].begin() - 1));
+    config_skey_t value(
+                        parameters_[0].substr(equal_pos - parameters_[0].begin() + 1,
+                                              parameters_[0].end() - equal_pos));
 
 #define CONFIG_USERHOME 616
 #define CONFIG_MHWIROOT 633
@@ -239,6 +244,111 @@ namespace CMD {
 #undef CONFIG_MHWIMMCROOT
 
     current_status_ = IDLE;
+    return 0;
+  }
+
+  int Mmc_cm::install(void)
+  {
+    // install [ mod name ] [ mod directory ]
+    if (nparams_ != 2) {
+      generic_err_msg_output(ERROR_MSG_INCFORM);
+      current_status_ = ERROR;
+      return -1;
+    }
+
+    const the_config_skey_t &path(conf_->mhwiroot);
+    char *cwd_path_buf(nullptr);
+    long path_max(pathconf("/", _PC_PATH_MAX));
+
+    try {
+      cwd_path_buf = new char[path_max];
+    } catch (std::alloc_bad &ec) {
+      generic_err_msg_output(ERROR_MSG_MEM);
+      current_status_ = ERROR;
+      return -1;
+    }
+    
+    // store current work directory path
+    getcwd(cwd_path_buf, path_max);
+    
+    const std::string &mod_name(parameters_[0]);
+    const std::string &mod_directory(parameters_[1]);
+
+    // get into mod directory
+    errno = 0;
+    if (chdir(mod_directory.c_str()) < 0) {
+      generic_err_msg_output(errno == ENOENT
+                             ? ERROR_MSG_FNOEXIST : ERROR_MSG_UNKNOWN);
+      delete[] cwd_path_buf;
+      current_status_ = ERROR;
+      return -1;
+    }
+
+    // list used to stores the files path records,
+    // include directory files.
+    std::list<std::string> mod_file_path_list;
+    
+    std::string mhwiroot(path);
+
+    // temporary string object used during iterating mod directory.
+    std::string tmp_dir(".");
+
+    auto install_mod_files = [&](std::string &dir) -> void {
+      DIR *current_dir = opendir(dir.c_str);
+      if (!current_dir)
+        return;
+
+      // an object used to  backup the directory path of
+      // recursion for this time.
+      std::string cwd_backup(dir);
+
+      struct *dirent dirent = NULL;
+
+      while ((dirent = readdir(current_dir))) {
+        if (strncmp(dirent->d_name, ".", 2) ||
+            strncmp(dirent->d_name, "..", 3))
+          continue;
+
+        // build file path record
+        std::string tmp_full_path(mhwiroot);
+        tmp_full_path += "/";
+        if (dir != "." ) {
+          // skip "./"
+          auto tmpstr(dir);
+          if (tmpstr.substr(0, 2) == "./")
+            tmpstr = tmpstr.substr(3, tmpstr.end() - tmpstr.begin() - 2);
+          tmp_full_path += tmpstr;
+          tmp_full_path += "/";
+        }
+
+        tmp_full_path += dirent->d_name;
+
+        if (dirent->d_type == DT_REG) {
+          link((dir + dirent->d_name).c_str(), tmp_full_path.c_str());
+          mod_file_path_list.insert(tmp_full_path);
+        } else if (dirent->d_type == DT_DIR) {
+          link((dir + dirent->d_name).c_str(), tmp_full_path.c_str());
+          mod_file_path_list.insert(tmp_full_path);
+
+          // recursive to subdir
+          dir += "/";
+          dir += dirent->d_name;
+          install_mod_files(dir);
+
+          dir = cwd_backup;
+        }
+
+      }
+
+      closedir(current_dir);
+    };
+
+    install_mod_files(tmp_dir);
+
+    chdir(cwd_path_buf);
+
+    delete[] cwd_path_buf;
+    current_status_ = IDEL;
     return 0;
   }
 }

@@ -5,7 +5,7 @@
 #include <string>
 #include <cstddef>
 
-namespace UI {
+namespace mhwimmc_ui_ns {
 
   class mhwimmc_ui finally {
   public:

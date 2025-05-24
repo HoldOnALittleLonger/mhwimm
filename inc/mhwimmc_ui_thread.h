@@ -3,14 +3,14 @@
 
 #include <string>
 
-class UI::mhwimmc_ui;
-struct ucmsgexchg;
+class mhwimmc_ui_ns::mhwimmc_ui;
+struct mhwimmc_sync_type_ns::ucmsgexchg;
 
 /**
  * mhwimmc_ui_thread_worker - C++ multithread worker for take charge of 
  *                            UI
  * @mmcui:                    an object is type of mhwimmc_ui
  */
-void mhwimmc_ui_thread_worker(mhwimmc_ui &mmcui, struct ucmsgexchg *ucme);
+void mhwimmc_ui_thread_worker(mhwimmc_ui_ns::mhwimmc_ui &mmcui, struct mhwimmc_sync_type_ns::ucmsgexchg *ucme);
 
 #endif
