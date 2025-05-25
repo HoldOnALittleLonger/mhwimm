@@ -1,50 +1,55 @@
 #ifndef _MHWIMMC_CMD_H_
 #define _MHWIMMC_CMD_H_
 
+#include "mhwimmc_config.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>
 #include <string>
 
-struct sqlite3;
+using exportToDBCallbackFunc_t = void (*)(const std::string &, const std::list<std::string>);
+using importFromCallbackFunc_t = void (*)(const std::string &, std::list<std::string>);
 
 namespace mhwimmc_cmd_ns {
 
   enum class cmd {
     CD,
-      LS,
-      INSTALL,
-      UNINSTALL,
-      INSTALLED,
-      CONFIG,
-      EXIT,
-      NOP
+    LS,
+    INSTALL,
+    UNINSTALL,
+    INSTALLED,
+    CONFIG,
+    EXIT,
+    NOP
   };
 
   enum class mmc_cmd_status {
     IDLE,
-      WORKING,
-      ERROR
+    WORKING,
+    ERROR
   };
 
   class Mmc_cmd finally {
   public:
 
-    Mmc_cmd(sqlite3 *db_handler, struct config_struct *conf) =default
-      : db_handler_(db_handler), conf_(conf)
-    {
-      current_cmd_ = NOP;
-      current_status_ = IDLE;
-      nparams_ = 0;
-      noutput_infos_ = 0;
-      is_cmd_has_output_ = false;
-    }
+    explicit Mmc_cmd(mhwimmc_config_ns::the_default_config_type *conf,
+                       exportToDBCallbackFunc_t export_func,
+                       importFromDBCallbackFunc_t import_func) =default
+      : conf_(conf), exportToDBCallback_(export_func), importFromDBCallback_(import_func)
+      {
+        current_cmd_ = NOP;
+        current_status_ = IDLE;
+        nparams_ = 0;
+        noutput_infos_ = 0;
+        is_cmd_has_output_ = false;
+      }
     
     int parseCMD(std::string &cmd_string) noexcept;
 
     int executeCurrentCMD(void) noexcept;
 
-    int getCMDOutput(std::string &buf)
+    int getCMDOutput(std::string &buf) noexcept
     {
       static std::size_t output_info_index(0);
       if (output_info_index == noutput_infos_)
@@ -58,35 +63,38 @@ namespace mhwimmc_cmd_ns {
       return -1;
     }
 
-    mmc_cmd_status currentStatus(void)
+    mmc_cmd_status currentStatus(void) noexcept
     {
       return current_status_;
     }
 
-    void resetMmc_cmdStatus(void)
+    void resetMmc_cmdStatus(void) noexcept
     {
       current_status_ = IDLE;
     }
 
   private:
 
-    int cd(void);
-    int ls(void);
-    int install(void);
-    int uninstall(void);
-    int installed(void);
-    int config(void);
-    int exit(void);
+    int cd(void) noexcept;
+    void ls(void) noexcept;
+    int install(void) noexcept;
+    int uninstall(void) noexcept;
+    void installed(void) noexcept;
+    int config(void) noexcept;
+    void exit(void) noexcept;
 
-    void generic_err_msg_output(const std::string &err_msg)
+    void generic_err_msg_output(const std::string &err_msg) noexcept
     {
       cmd_output_infos_[0] = err_msg;
       noutput_infos_ = 1;
       is_cmd_has_output_ = true;
     }
 
-    sqlite3 *db_handler_;
-    struct config_struct *conf_;
+    mhwimmc_config_ns::the_default_config_type *conf_;
+
+    /* using the export/import callback,we are no longer have to care about db */
+    exportToDBCallbackFunc_t exportToDBCallback_;
+    importFromCallbackFunc_t importFromDBCallback_;
 
     cmd current_cmd_;
     mmc_cmd_status current_status_;

@@ -35,6 +35,9 @@ namespace mhwimmc_config_ns {
     skey_t mhwimmcroot;
   };
 
+  using the_default_config_type =
+    config_struct<general_config_types<std::string, int>>;
+
 }
 
 #endif

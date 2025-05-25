@@ -144,17 +144,11 @@ namespace mhwimmc_cmd_ns {
     }
 
     int ret(chdir(parameters_[0].c_str));
-
     return ret ? current_status_ = ERROR, -1 : current_status_ = IDLE, 0;
   }
 
-  int Mmc_cmd::ls(void)
+  void Mmc_cmd::ls(void)
   {
-    if (nparams_) {
-      current_status_ = ERROR;
-      return -1;
-    }
-
     // open current work directory
     DIR *this_dir(opendir("."));
     struct dirent *dir(NULL);
@@ -170,11 +164,13 @@ namespace mhwimmc_cmd_ns {
     current_status_ = IDLE;
     is_cmd_has_output_ = true;
     (void)closedir(this_dir);
-    return 0;
   }
 
-  int Mmc_cmd::exit(void)
+  void Mmc_cmd::exit(void)
   {
+    // we does not use concurrent protecting at there,
+    // because of that the other control path will change this
+    // indicator is the signal handler
     program_exit = true;
     current_status_ = IDLE;
     return 0;
@@ -190,7 +186,7 @@ namespace mhwimmc_cmd_ns {
     bool is_correct(false);
     std::string::iterator equal_pos(parameters_[0].begin());
 
-    auto check_if_correct_format = [&](void) -> void {
+    auto check_if_correct_format = [&, this](void) -> void {
       std::size_t spaces_character(0);
       std::size_t equal_symbol(0);
       for (auto i(equal_pos); i != parameters_[0].end(); ++i) {
@@ -215,11 +211,9 @@ namespace mhwimmc_cmd_ns {
       return -1;
     }
 
-    config_skey_t key(
-                      parameters_[0].substr(0, equal_pos - parameters_[0].begin() - 1));
-    config_skey_t value(
-                        parameters_[0].substr(equal_pos - parameters_[0].begin() + 1,
-                                              parameters_[0].end() - equal_pos));
+    std::string key(parameters_[0].substr(0, equal_pos - parameters_[0].begin() - 1));
+    std::string value(parameters_[0].substr(equal_pos - parameters_[0].begin() + 1,
+                                            parameters_[0].end() - equal_pos));
 
 #define CONFIG_USERHOME 616
 #define CONFIG_MHWIROOT 633
@@ -227,13 +221,13 @@ namespace mhwimmc_cmd_ns {
 
     switch (calculate_key(key.c_str())) {
     case CONFIG_USERHOME:
-      conf_->userhome = value;
+      conf_->userhome = static_cast<typename mhwimmc_config_ns::the_default_config_type::skey_t>(value);
       break;
     case CONFIG_MHWIROOT:
-      conf_->mwhiroot = value;
+      conf_->mwhiroot = static_cast<typename mhwimmc_config_ns::the_default_config_type::skey_t>(value);
       break;
     case CONFIG_MHWIMMCROOT:
-      conf_->mwhimmcroot = value;
+      conf_->mwhimmcroot = static_cast<typename mhwimmc_config_ns::the_default_config_type::skey_t>(value);
       break;
     default: // unknown config,do nothing
       ;
@@ -247,7 +241,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int Mmc_cm::install(void)
+  int Mmc_cmd::install(void)
   {
     // install [ mod name ] [ mod directory ]
     if (nparams_ != 2) {
@@ -256,13 +250,13 @@ namespace mhwimmc_cmd_ns {
       return -1;
     }
 
-    const the_config_skey_t &path(conf_->mhwiroot);
+    const auto &mhwiroot_path(conf_->mhwiroot);
     char *cwd_path_buf(nullptr);
     long path_max(pathconf("/", _PC_PATH_MAX));
 
     try {
       cwd_path_buf = new char[path_max];
-    } catch (std::alloc_bad &ec) {
+    } catch (std::bad_alloc &ec) {
       generic_err_msg_output(ERROR_MSG_MEM);
       current_status_ = ERROR;
       return -1;
@@ -286,14 +280,12 @@ namespace mhwimmc_cmd_ns {
 
     // list used to stores the files path records,
     // include directory files.
-    std::list<std::string> mod_file_path_list;
-    
-    std::string mhwiroot(path);
-
+    std::list<std::string> mod_filepaths_list;
+    std::string mhwiroot(static_cast<std::string>(mhwiroot_path));
     // temporary string object used during iterating mod directory.
     std::string tmp_dir(".");
 
-    auto install_mod_files = [&](std::string &dir) -> void {
+    auto install_mod_files = [&, mhwiroot, tmp_dir](std::string &dir) -> void {
       DIR *current_dir = opendir(dir.c_str);
       if (!current_dir)
         return;
@@ -305,6 +297,7 @@ namespace mhwimmc_cmd_ns {
       struct *dirent dirent = NULL;
 
       while ((dirent = readdir(current_dir))) {
+        // skil current directory and last directory
         if (strncmp(dirent->d_name, ".", 2) ||
             strncmp(dirent->d_name, "..", 3))
           continue;
@@ -325,10 +318,10 @@ namespace mhwimmc_cmd_ns {
 
         if (dirent->d_type == DT_REG) {
           link((dir + dirent->d_name).c_str(), tmp_full_path.c_str());
-          mod_file_path_list.insert(tmp_full_path);
+          mod_filepaths_list.insert(tmp_full_path);
         } else if (dirent->d_type == DT_DIR) {
           link((dir + dirent->d_name).c_str(), tmp_full_path.c_str());
-          mod_file_path_list.insert(tmp_full_path);
+          mod_filepaths_list.insert(tmp_full_path);
 
           // recursive to subdir
           dir += "/";
@@ -345,10 +338,67 @@ namespace mhwimmc_cmd_ns {
 
     install_mod_files(tmp_dir);
 
+    // we just invoke the callback to export all file path infos
+    // to the DB module
+    exportToDBCallback(mod_name, mod_filepaths_list);
+
+    // switch cwd to the old path
     chdir(cwd_path_buf);
 
     delete[] cwd_path_buf;
     current_status_ = IDEL;
+    return 0;
+  }
+
+  int Mmc_cmd::uninstall(void)
+  {
+    // when removing mods from game root directory,we have to
+    // take care of empty directory
+    // if a directory were not empty but now it is empty because
+    // we removed the mode files,then we should remove this
+    // directory,too
+
+    // uninstall [ mod name ]
+    if (nparams_ != 1) {
+      generic_err_msg_output(ERROR_MSG_INCFORM);
+      current_status_ = ERROR;
+      return -1;
+    }
+
+    std::list<std::string> db_records_list;
+    importFromDBCallback(parameters_[0], db_records_list);
+
+    // first walk-through removes all regular files
+    for (auto it(db_records_list.begin()); it != db_records_list.end(); ++it) {
+      struct stat file_stat = 0;
+      int ret = stat(it->c_str(), &file_stat);
+      if (ret < 0)
+        continue;
+      else if (S_ISREG(file_stat.st_mode)) {
+        unlink(it->c_str());
+        db_records_list.erase(it);
+      }
+    }
+
+    // second walk-through removes all directories
+    for (auto x : db_records_list)
+      rmdir(x.c_str());
+
+    current_status_ = IDLE;
+    return 0;
+  }
+
+  void Mmc_cmd::installed(void)
+  {
+    current_status_ = WORKING;
+    std::list<std::string> db_records_list;
+    importFromDBCallback("*", db_records_list);
+    noutput_infos_ = 0;
+    for (auo x : db_records_list) {
+      cmd_output_infos_[noutput_infos++] = x;
+    }
+    is_cmd_has_output_ = true;
+    current_status_ = IDLE;
     return 0;
   }
 }
