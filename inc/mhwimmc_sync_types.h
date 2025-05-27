@@ -5,6 +5,10 @@
 #include <cstdint>
 #include <string>
 #include <mutex>
+#include <list>
+
+using exportToDBCallbackFunc_t = void (*)(const std::string &, const std::list<std::string> &);
+using importFromCallbackFunc_t = void (*)(const std::string &, std::list<std::string> &);
 
 namespace mhwimmc_sync_type_ns {
 
@@ -12,22 +16,21 @@ namespace mhwimmc_sync_type_ns {
    * ucmsgexchg - structure used to represents the msg format between
    *              UI module and CMD module
    * @status:     bit field
-   *                0 => CMD module have more msg to be sent
-   *                1 => CMD module finished work,now UI module should
-   *                     tell user that the next command event cycle has
-   *                     been started
+   *                2 => CMD module has more msg to send
+   *                1 => CMD module has just one msg to send
+   *                0 => CMD module has no msg to send
    * @io_buf:     message buffer
    */
   struct ucmsgexchg {
-    uint8_t status:1;
+    uint8_t status:2;
     std::string io_buf;
   };
 
   enum class SQL_OP : uint8_t { 
     SQL_ADD,
-      SQL_DEL,
-      SQL_ASK
-      };
+    SQL_DEL,
+    SQL_ASK
+  };
 
   /**
    * cdbmsgexchg - structure used to represents the msg format between
@@ -46,9 +49,9 @@ namespace mhwimmc_sync_type_ns {
     uint8_t op;
 
     struct table_record {
-      std::string_view name;
-      std::string_view full_path;
-      std::string_view date;
+      std::string name;
+      std::string full_path;
+      std::string date;
     } info;
   };
 

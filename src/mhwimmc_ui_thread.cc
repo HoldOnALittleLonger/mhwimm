@@ -45,11 +45,14 @@ void mhwimmc_ui_thread_worker(UI::mhwimmc_ui &mmcui, struct ucmsgexchg *ucme)
     while (1) {
       uitw_unique_lock.lock();
 
+      if (ucme->status == 0) // no output info
+        break;
+
       mmcui.newLine();
       mmcui.printIndentSpaces();
       mmcui.printMessage(ucme->io_buf);
 
-      if (ucme->status)
+      if (ucme->status == 1)
         break;
 
       uitw_unique_lock.unlock();

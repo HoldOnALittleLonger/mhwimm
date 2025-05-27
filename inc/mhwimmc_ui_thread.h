@@ -11,6 +11,6 @@ struct mhwimmc_sync_type_ns::ucmsgexchg;
  *                            UI
  * @mmcui:                    an object is type of mhwimmc_ui
  */
-void mhwimmc_ui_thread_worker(mhwimmc_ui_ns::mhwimmc_ui &mmcui, struct mhwimmc_sync_type_ns::ucmsgexchg *ucme);
+void mhwimmc_ui_thread_worker(mhwimmc_ui_ns::mhwimmc_ui &mmcui, mhwimmc_sync_type_ns::ucmsgexchg *ucme);
 
 #endif

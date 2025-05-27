@@ -28,7 +28,7 @@ namespace mhwimmc_cmd_ns {
     return result;
   };
 
-  int Mmc_cmd::parseCMD(std::string &cmd_string)
+  int Mmc_cmd::parseCMD(const std::string &cmd_string)
   {
     current_status_ = WORKING;
     
@@ -110,6 +110,7 @@ namespace mhwimmc_cmd_ns {
 
   int Mmc_cmd::executeCurrentCMD(void)
   {
+    noutput_infos_ = 0;
     if (current_status_ & (ERROR  | WORKING))
       return -1;
     current_status_ = WORKING;
@@ -147,7 +148,7 @@ namespace mhwimmc_cmd_ns {
     return ret ? current_status_ = ERROR, -1 : current_status_ = IDLE, 0;
   }
 
-  void Mmc_cmd::ls(void)
+  int Mmc_cmd::ls(void)
   {
     // open current work directory
     DIR *this_dir(opendir("."));
@@ -164,9 +165,10 @@ namespace mhwimmc_cmd_ns {
     current_status_ = IDLE;
     is_cmd_has_output_ = true;
     (void)closedir(this_dir);
+    return 0;
   }
 
-  void Mmc_cmd::exit(void)
+  int Mmc_cmd::exit(void)
   {
     // we does not use concurrent protecting at there,
     // because of that the other control path will change this
@@ -388,7 +390,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  void Mmc_cmd::installed(void)
+  int Mmc_cmd::installed(void)
   {
     current_status_ = WORKING;
     std::list<std::string> db_records_list;

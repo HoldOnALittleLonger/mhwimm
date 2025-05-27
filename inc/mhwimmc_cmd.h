@@ -5,13 +5,21 @@
 
 #include <cstddef>
 #include <cstdint>
+
 #include <vector>
 #include <string>
-
-using exportToDBCallbackFunc_t = void (*)(const std::string &, const std::list<std::string>);
-using importFromCallbackFunc_t = void (*)(const std::string &, std::list<std::string>);
+#include <list>
 
 namespace mhwimmc_cmd_ns {
+
+  
+  static void nullExportDBCallback(const std::string &name, const std::list<std::string> &records)
+  {
+  }
+
+  static void nullImportDBCallback(const std::string &name, std::list<std::string> &records)
+  {
+  }
 
   enum class cmd {
     CD,
@@ -33,34 +41,55 @@ namespace mhwimmc_cmd_ns {
   class Mmc_cmd finally {
   public:
 
-    explicit Mmc_cmd(mhwimmc_config_ns::the_default_config_type *conf,
-                       exportToDBCallbackFunc_t export_func,
-                       importFromDBCallbackFunc_t import_func) =default
-      : conf_(conf), exportToDBCallback_(export_func), importFromDBCallback_(import_func)
+    explicit Mmc_cmd(mhwimmc_config_ns::the_default_config_type *conf) =default
+      : conf_(conf)
       {
         current_cmd_ = NOP;
         current_status_ = IDLE;
         nparams_ = 0;
         noutput_infos_ = 0;
         is_cmd_has_output_ = false;
+        output_info_index_ = 0;
+        exportToDBCallback_ = nullExportDBCallback;
+        importFromDBCallback_ = nullImportDBCallback;
       }
+
+    Mmc_cmd(const Mmc_cmd &) =delete;
+    Mmc_cmd &operator=(const Mmc_cmd &) =delete;
+    Mmc_cmd(Mmc_cmd &&) =delete;
+    Mmc_cmd &operator=(Mmc_cmd &&) =delete;
     
-    int parseCMD(std::string &cmd_string) noexcept;
+    int parseCMD(const std::string &cmd_string) noexcept;
 
     int executeCurrentCMD(void) noexcept;
 
     int getCMDOutput(std::string &buf) noexcept
     {
-      static std::size_t output_info_index(0);
-      if (output_info_index == noutput_infos_)
+      if (output_info_index_ == noutput_infos_)
         is_cmd_has_output_ = false;
 
-      if (is_cmd_has_output_ && output_info_index < noutput_infos_) {
-        buf = cmd_output_infos_[output_info_index++];
+      if (is_cmd_has_output_ && output_info_index_ < noutput_infos_) {
+        buf = cmd_output_infos_[output_info_index_++];
         return 0;
       }
-      output_info_index = 0;
+      clearGetOutputHistory();
       return -1;
+    }
+
+    void clearGetOuputHistory(void) { output_info_index_ = 0; }
+
+    void *registerExportCallback(exportToDBCallbackFunc_t func)
+    {
+      auto x(exportToDBCallback_);
+      exportToDBCallback_ = func;
+      return x;
+    }
+
+    void *registerImportCallback(importFromDBCallbackFunc_t func)
+    {
+      auto x(importFromDBCallback_);
+      importFromDBCallback_ = func;
+      return x;
     }
 
     mmc_cmd_status currentStatus(void) noexcept
@@ -68,7 +97,9 @@ namespace mhwimmc_cmd_ns {
       return current_status_;
     }
 
-    void resetMmc_cmdStatus(void) noexcept
+    cmd currentCMD(void) noexcept { return current_cmd_; }
+
+    void resetStatus(void) noexcept
     {
       current_status_ = IDLE;
     }
@@ -76,12 +107,12 @@ namespace mhwimmc_cmd_ns {
   private:
 
     int cd(void) noexcept;
-    void ls(void) noexcept;
+    int ls(void) noexcept;
     int install(void) noexcept;
     int uninstall(void) noexcept;
-    void installed(void) noexcept;
+    int installed(void) noexcept;
     int config(void) noexcept;
-    void exit(void) noexcept;
+    int exit(void) noexcept;
 
     void generic_err_msg_output(const std::string &err_msg) noexcept
     {
@@ -105,6 +136,8 @@ namespace mhwimmc_cmd_ns {
     std::size_t noutput_infos_;
     std::vectory<std::string> cmd_output_infos_;
     bool is_cmd_has_output_;
+
+    std::size_t output_info_index_;
   };
 
 }
