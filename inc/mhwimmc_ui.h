@@ -77,7 +77,7 @@ namespace mhwimmc_ui_ns {
 
   private:
     /* local_msg_buffer_ - temporary local message buffer */
-    std::string_view local_msg_buffer_;
+    std::string local_msg_buffer_;
   
     /* prompt_msg_ - a constant object to stores prompt message */
     const std::string_view prompt_msg_;

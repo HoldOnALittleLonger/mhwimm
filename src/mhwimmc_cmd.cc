@@ -28,7 +28,7 @@ namespace mhwimmc_cmd_ns {
     return result;
   };
 
-  int Mmc_cmd::parseCMD(const std::string &cmd_string)
+  int mhwimmc_cmd::parseCMD(const std::string &cmd_string)
   {
     current_status_ = WORKING;
     
@@ -108,7 +108,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int Mmc_cmd::executeCurrentCMD(void)
+  int mhwimmc_cmd::executeCurrentCMD(void)
   {
     noutput_infos_ = 0;
     if (current_status_ & (ERROR  | WORKING))
@@ -136,7 +136,7 @@ namespace mhwimmc_cmd_ns {
     }
   }
 
-  int Mmc_cmd::cd(void)
+  int mhwimmc_cmd::cd(void)
   {
     // "cd" command only receives one parameter
     if (nparams_ != 1) {
@@ -148,7 +148,7 @@ namespace mhwimmc_cmd_ns {
     return ret ? current_status_ = ERROR, -1 : current_status_ = IDLE, 0;
   }
 
-  int Mmc_cmd::ls(void)
+  int mhwimmc_cmd::ls(void)
   {
     // open current work directory
     DIR *this_dir(opendir("."));
@@ -168,7 +168,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int Mmc_cmd::exit(void)
+  int mhwimmc_cmd::exit(void)
   {
     // we does not use concurrent protecting at there,
     // because of that the other control path will change this
@@ -178,7 +178,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int Mmc_cmd::config(void)
+  int mhwimmc_cmd::config(void)
   {
     if (nparams_ != 1) {
       current_status_ = ERROR;
@@ -243,7 +243,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int Mmc_cmd::install(void)
+  int mhwimmc_cmd::install(void)
   {
     // install [ mod name ] [ mod directory ]
     if (nparams_ != 2) {
@@ -352,7 +352,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int Mmc_cmd::uninstall(void)
+  int mhwimmc_cmd::uninstall(void)
   {
     // when removing mods from game root directory,we have to
     // take care of empty directory
@@ -390,7 +390,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int Mmc_cmd::installed(void)
+  int mhwimmc_cmd::installed(void)
   {
     current_status_ = WORKING;
     std::list<std::string> db_records_list;

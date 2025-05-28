@@ -1,6 +1,7 @@
 #ifndef _MHWIMMC_CONFIG_H_
 #define _MHWIMMC_CONFIG_H_
 
+#include <cstddef>
 
 namespace mhwimmc_config_ns {
 

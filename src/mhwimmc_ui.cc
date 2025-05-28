@@ -1,6 +1,6 @@
 #include "mhwimmc_ui.h"
 
-namespace UI {
+namespace mhwimmc_ui_ns {
 
   ssize_t mhwimmc_ui::readFromUser(void)
   {

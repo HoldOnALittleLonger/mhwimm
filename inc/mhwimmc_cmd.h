@@ -21,7 +21,7 @@ namespace mhwimmc_cmd_ns {
   {
   }
 
-  enum class cmd {
+  enum class mhwimmc_cmd_cmd {
     CD,
     LS,
     INSTALL,
@@ -32,16 +32,16 @@ namespace mhwimmc_cmd_ns {
     NOP
   };
 
-  enum class mmc_cmd_status {
+  enum class mhwimmc_cmd_status {
     IDLE,
     WORKING,
     ERROR
   };
 
-  class Mmc_cmd finally {
+  class mhwimmc_cmd finally {
   public:
 
-    explicit Mmc_cmd(mhwimmc_config_ns::the_default_config_type *conf) =default
+    explicit mhwimmc_cmd(mhwimmc_config_ns::the_default_config_type *conf) =default
       : conf_(conf)
       {
         current_cmd_ = NOP;
@@ -54,10 +54,10 @@ namespace mhwimmc_cmd_ns {
         importFromDBCallback_ = nullImportDBCallback;
       }
 
-    Mmc_cmd(const Mmc_cmd &) =delete;
-    Mmc_cmd &operator=(const Mmc_cmd &) =delete;
-    Mmc_cmd(Mmc_cmd &&) =delete;
-    Mmc_cmd &operator=(Mmc_cmd &&) =delete;
+    mhwimmc_cmd(const mhwimmc_cmd &) =delete;
+    mhwimmc_cmd &operator=(const mhwimmc_cmd &) =delete;
+    mhwimmc_cmd(mhwimmc_cmd &&) =delete;
+    mhwimmc_cmd &operator=(mhwimmc_cmd &&) =delete;
     
     int parseCMD(const std::string &cmd_string) noexcept;
 
@@ -92,12 +92,12 @@ namespace mhwimmc_cmd_ns {
       return x;
     }
 
-    mmc_cmd_status currentStatus(void) noexcept
+    auto currentStatus(void) noexcept
     {
       return current_status_;
     }
 
-    cmd currentCMD(void) noexcept { return current_cmd_; }
+    auto currentCMD(void) noexcept { return current_cmd_; }
 
     void resetStatus(void) noexcept
     {
@@ -106,6 +106,7 @@ namespace mhwimmc_cmd_ns {
 
   private:
 
+    // some command may always return _zero_
     int cd(void) noexcept;
     int ls(void) noexcept;
     int install(void) noexcept;
@@ -127,8 +128,8 @@ namespace mhwimmc_cmd_ns {
     exportToDBCallbackFunc_t exportToDBCallback_;
     importFromCallbackFunc_t importFromDBCallback_;
 
-    cmd current_cmd_;
-    mmc_cmd_status current_status_;
+    mhwimmc_cmd_cmd current_cmd_;
+    mhwimmc_cmd_status current_status_;
 
     std::size_t nparams_;
     std::vector<std::string> parameters_;

@@ -4,7 +4,7 @@
 #include <cstddef>
 
 
-void mhwimmc_cmd_thread_worker(mhwimmc_cmd_ns::Mmc_cmd &mmccmd,
+void mhwimmc_cmd_thread_worker(mhwimmc_cmd_ns::mhwimmc_cmd &cmd_handler,
                                exportToDBCallbackFunc_t exportFunc,
                                importFromCallbackFunc_t importFunc,
                                mhwimmc_sync_types_ns::ucmsgexchg *ucme)
@@ -30,8 +30,8 @@ void mhwimmc_cmd_thread_worker(mhwimmc_cmd_ns::Mmc_cmd &mmccmd,
     cdb_locker.lock();
   };
 
-  mmccmd.registerExportCallback(ExportSyncToDB);
-  mmccmd.registerImportCallback(ImportSyncToDB);
+  cmd_handler.registerExportCallback(ExportSyncToDB);
+  cmd_handler.registerImportCallback(ImportSyncToDB);
 
   for (; ;) {
     if (program_exit)
@@ -42,34 +42,34 @@ void mhwimmc_cmd_thread_worker(mhwimmc_cmd_ns::Mmc_cmd &mmccmd,
     // new command event cycle
     // reset status
     // clear output infos
-    mmccmd.resetStatus();
-    mmccmd.clearGetOutputHistory();
+    cmd_handler.resetStatus();
+    cmd_handler.clearGetOutputHistory();
 
-    int ret = mmccmd.parseCMD(ucme->io_buf);
+    int ret = cmd_handler.parseCMD(ucme->io_buf);
     if (ret < 0) {
       ucme->status = 1;
-      mmccmd.getCMDOutput(ucme->io_buf);
+      cmd_handler.getCMDOutput(ucme->io_buf);
       continue;
     }
 
-    ret = executeCurrentCMD();
+    ret = cmd_handler.executeCurrentCMD();
     if (ret < 0) {
       ucme->status = 1;
-      mmccmd.getCMDOutput(ucme->io_buf);
+      cmd_handler.getCMDOutput(ucme->io_buf);
       continue;
     }
 
-    if (mmccmd.currentCMD() == mhwimmc_cmd_ns::INSTALLED) {
+    if (cmd_handler.currentCMD() == mhwimmc_cmd_ns::INSTALLED) {
       // output more than once
       do {
-        ret = mmccmd.getCMDOutput(ucme->io_buf);
+        ret = cmd_handler.getCMDOutput(ucme->io_buf);
         ucme->stats = ret < 0 ? 0 : 2;
         if (ret < 0)
           break;
         uc_locker.unlock();
       } while(uc_locker.lock(), 1);
     } else {
-      ret = mmccmd.getCMDOutput(ucme->io_buf);
+      ret = cmd_handler.getCMDOutput(ucme->io_buf);
       if (ret < 0) {
         // CMD no output
         ucme->status = 0;

@@ -1,7 +1,7 @@
 #ifndef _MHWIMMC_UI_THREAD_H_
 #define _MHWIMMC_UI_THREAD_H_
 
-#include <string>
+#include <cstddef>
 
 class mhwimmc_ui_ns::mhwimmc_ui;
 struct mhwimmc_sync_type_ns::ucmsgexchg;

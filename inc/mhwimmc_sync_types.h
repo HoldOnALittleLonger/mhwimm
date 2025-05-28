@@ -26,35 +26,6 @@ namespace mhwimmc_sync_type_ns {
     std::string io_buf;
   };
 
-  enum class SQL_OP : uint8_t { 
-    SQL_ADD,
-    SQL_DEL,
-    SQL_ASK
-  };
-
-  /**
-   * cdbmsgexchg - structure used to represents the msg format between
-   *               UI module and DB module
-   * @op:          operation
-   *                 SQL_ADD => add a record
-   *                 SQL_DEL => delete a record
-   *                 SQL_ASK => try to find a record
-   * @info:        an object is type of struct table_record is used to
-   *               handles table record
-   *               @name => name field
-   *               @full_path => full path
-   *               @date => date
-   */
-  struct cdbmsgexchg {
-    uint8_t op;
-
-    struct table_record {
-      std::string name;
-      std::string full_path;
-      std::string date;
-    } info;
-  };
-
   /* ucmutex - mutex used to make synchronization between UI and CMD */
   extern std::mutex ucmutex;
 
