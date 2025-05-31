@@ -44,17 +44,22 @@ namespace mhwimmc_db_ns {
       : db_name_(db_name), db_path_(db_path)
     {
       db_handler_ = nullptr;
+      sql_stmt_ = nullptr;
       current_op_ = SQL_OP::SQL_NOP;
       current_status_ = DB_STATUS::DB_IDLE;
       record_buf_ = db_table_record{0};
       local_err_msg_ = "nil";
+      more_row_indicator_;
     }
 
     int openDB(void);
     int closeDB(void);
+    int tryCreateTable(void);
 
-    void getFieldValue(db_tr_idx i, std::string &buf)
+    int getFieldValue(db_tr_idx i, std::string &buf)
     {
+      if (!more_row_indicator_)
+        return -1;
       current_status_ = DB_STATUS::DB_WORKING;
       switch (i) {
       case db_tr_idx::IDX_MOD_NAME:
@@ -65,9 +70,11 @@ namespace mhwimmc_db_ns {
         break;
       case db_tr_idx::IDX_INSTALL_DATE:
         buf = record_buf_.install_date;
-      default:;
+      default:
+        return -1;
       }
       current_status_ = DB_STATUS::DB_IDLE;
+      return 0;
     }
 
     void registerDBOperation(SQL_OP op, const db_table_record &operand)
@@ -98,10 +105,20 @@ namespace mhwimmc_db_ns {
     std::string db_name_;
     std::string db_path_;
     sqlite3 *db_handler_;
+    sqlite3_stmt *sql_stmt_;
     SQL_OP current_op_;
     db_table_record record_buf_;
     DB_STATUS current_status_;
     std::string local_err_msg_;
+    bool more_row_indicator_;
+
+    constexpr const char *table_name_ = "mhwimmc_db_table";
+    constexpr const char *sqlCreateTable_ =
+      "CREATE TABLE mhwimmc_db_table ("
+      "mod_name CHAR NOT NULL,"
+      "mod_path CHAR NOT NULL PRIMARY KEY,"
+      "install_date CHAR NOT NULL);";
+
   };
 
 }
