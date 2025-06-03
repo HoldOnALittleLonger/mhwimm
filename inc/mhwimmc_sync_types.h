@@ -7,10 +7,10 @@
 #include <mutex>
 #include <list>
 
-using exportToDBCallbackFunc_t = void (*)(const std::string &, const std::list<std::string> &);
-using importFromCallbackFunc_t = void (*)(const std::string &, std::list<std::string> &);
-
 namespace mhwimmc_sync_type_ns {
+
+using exportToDBCallbackFunc_t = int (*)(const std::string &, const std::list<std::string> &);
+using importFromCallbackFunc_t = int (*)(const std::string &, std::list<std::string> &);
 
   /**
    * ucmsgexchg - structure used to represents the msg format between
@@ -35,6 +35,8 @@ namespace mhwimmc_sync_type_ns {
   /* program_exit - boolean value used to indicates whether the program should stop */
   extern bool program_exit;
 
+  /* is_db_op_succeed - indicate whether the last db operation is succeed */
+  extern bool is_db_op_succeed;
 }
 
 #endif

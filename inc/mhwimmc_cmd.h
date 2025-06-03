@@ -2,6 +2,7 @@
 #define _MHWIMMC_CMD_H_
 
 #include "mhwimmc_config.h"
+#include "mhwimmc_sync_types.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -12,12 +13,14 @@
 
 namespace mhwimmc_cmd_ns {
 
-  
-  static void nullExportDBCallback(const std::string &name, const std::list<std::string> &records)
+  using mhwimmc_sync_type_ns::exportToDBCallbackFunc_t;
+  using mhwimmc_sync_type_ns::importFromCallbackFunct_;
+
+  static int nullExportDBCallback(const std::string &name, const std::list<std::string> &records)
   {
   }
 
-  static void nullImportDBCallback(const std::string &name, std::list<std::string> &records)
+  static int nullImportDBCallback(const std::string &name, std::list<std::string> &records)
   {
   }
 

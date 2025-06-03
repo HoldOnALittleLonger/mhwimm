@@ -18,6 +18,7 @@ namespace mhwimmc_cmd_ns {
 #define ERROR_MSG_INCFORM "error: Incorrect format."
 #define ERROR_MSG_UNKNOWN " error: Unknown error."
 #define ERROR_MSG_FNOEXIST "error: No such file or directory."
+#define ERROR_MSG_DBREQ_FAILED "error: Database OP failed."
 
   static calculate_key(const char *cmd_str) -> int32_t
   {
@@ -340,15 +341,23 @@ namespace mhwimmc_cmd_ns {
 
     install_mod_files(tmp_dir);
 
-    // we just invoke the callback to export all file path infos
-    // to the DB module
-    exportToDBCallback(mod_name, mod_filepaths_list);
+    current_status_ = IDEL;
 
     // switch cwd to the old path
     chdir(cwd_path_buf);
-
     delete[] cwd_path_buf;
-    current_status_ = IDEL;
+
+    // we just invoke the callback to export all file path infos
+    // to the DB module
+    if (exportToDBCallback(mod_name, mod_filepaths_list) < 0) {
+      generic_err_msg_output(
+                             std::string{ERROR_DBREQ_FAILED} +
+                             "mod name : " + parameters_[1] +
+                             " - please remove the mod manually.");
+      current_status_ = ERROR;
+      return -1;
+    }
+
     return 0;
   }
 
@@ -368,7 +377,11 @@ namespace mhwimmc_cmd_ns {
     }
 
     std::list<std::string> db_records_list;
-    importFromDBCallback(parameters_[0], db_records_list);
+    if (importFromDBCallback(parameters_[0], db_records_list) < 0) {
+      generic_err_msg_output(std::string{ERROR_MSG_DBREQ_FAILED} + "mod name : " + parameters_[1]);
+      current_status_ = ERROR;
+      return -1;
+    }
 
     // first walk-through removes all regular files
     for (auto it(db_records_list.begin()); it != db_records_list.end(); ++it) {
@@ -394,7 +407,11 @@ namespace mhwimmc_cmd_ns {
   {
     current_status_ = WORKING;
     std::list<std::string> db_records_list;
-    importFromDBCallback("*", db_records_list);
+    if (importFromDBCallback("*", db_records_list) < 0) {
+      generic_err_msg(ERROR_DBREQ_FAILED);
+      current_status_ = ERROR;
+      return -1;
+    }
     noutput_infos_ = 0;
     for (auo x : db_records_list) {
       cmd_output_infos_[noutput_infos++] = x;

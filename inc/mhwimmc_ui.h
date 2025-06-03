@@ -28,8 +28,10 @@ namespace mhwimmc_ui_ns {
      */
     void printPrompt(void)
     {
-            std::cout<< prompt_msg_ << flush;
+      std::cout<< prompt_msg_ << flush;
     }
+    
+    /* printStartupMsg - print startup msg */
     void printStartupMsg(void)
     {
       printPrompt();
@@ -43,7 +45,7 @@ namespace mhwimmc_ui_ns {
      */
     void printMessage(std::string &msg)
     {
-            std::cout<< msg << flush;
+      std::cout<< msg << flush;
     }
 
     /**
@@ -61,6 +63,7 @@ namespace mhwimmc_ui_ns {
       des = local_msg_buffer_;
     }
 
+    /* printIndentSpaces - print indent */
     void printIndentSpaces(void)
     {
       auto x(space_indent_);
@@ -70,6 +73,7 @@ namespace mhwimmc_ui_ns {
       std::cout << flush;
     }
 
+    /* newLine - start a new line */
     void newLine(void)
     {
       std::cout << std::endl;
@@ -85,6 +89,7 @@ namespace mhwimmc_ui_ns {
     /* startup_msg_ - the message will be print when program is startup */
     const std::string_view startup_msg_;
 
+    /* space_indent_ - number of spaces for line indent */
     const unsigned short space_indent_;
   };
 

@@ -1,6 +1,15 @@
 #include "mhwimmc_ui_thread.h"
 #include "mhwimmc_sync_types.h"
 
+using mhwimmc_sync_type_ns::ucmsgexchg, mhwimmc_sync_type_ns::program_exit,
+  mhwimmc_sync_type_ns::ucmutex;
+
+/**
+ * mhwimmc_ui_thread_worker - UI module control thread
+ * @mmcui:                    UI module core object handler
+ * @ucme:                     message exchange structure between UI module and
+ *                            CMD module
+ */
 void mhwimmc_ui_thread_worker(mhwimmc_ui_ns::mhwimmc_ui &mmcui, mhwimmc_sync_types_ns::ucmsgexchg *ucme)
 {
   std::unique_lock::unique_lock uitw_unique_lock(&ucmutex);

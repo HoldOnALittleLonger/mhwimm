@@ -52,9 +52,16 @@ namespace mhwimmc_db_ns {
       more_row_indicator_;
     }
 
+    mhwimmc_db(const mhwimmc_db &) =delete;
+    mhwimmc_db &operator=(const mhwimmc_db &) =delete;
+    mhwimmc_db(mhwimmc_db &&) =delete;
+    mhwimmc_db &operator=(mhwimmc_db &&) =delete;
+
     int openDB(void);
     int closeDB(void);
     int tryCreateTable(void);
+
+    bool is_db_opened(void) const { return !(db_handler_ == nullptr); }
 
     int getFieldValue(db_tr_idx i, std::string &buf)
     {
