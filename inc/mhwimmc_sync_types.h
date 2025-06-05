@@ -3,9 +3,13 @@
 
 #include <cstddef>
 #include <cstdint>
+
 #include <string>
 #include <mutex>
 #include <list>
+
+/* C99 standard */
+typedef int atomic_t;
 
 namespace mhwimmc_sync_type_ns {
 
@@ -32,8 +36,8 @@ using importFromCallbackFunc_t = int (*)(const std::string &, std::list<std::str
   /* cdbmutex - mutex used to make synchronization between CMD and DB */
   extern std::mutex cdbmutex;
 
-  /* program_exit - boolean value used to indicates whether the program should stop */
-  extern bool program_exit;
+  /* program_exit - value used to indicates whether the program should stop */
+  extern atomic_t program_exit;
 
   /* is_db_op_succeed - indicate whether the last db operation is succeed */
   extern bool is_db_op_succeed;
