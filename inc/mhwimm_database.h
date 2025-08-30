@@ -1,5 +1,5 @@
-#ifndef _MHWIMMC_DATABASE_H_
-#define _MHWIMMC_DATABASE_H_
+#ifndef _MHWIMM_DATABASE_H_
+#define _MHWIMM_DATABASE_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -8,7 +8,7 @@
 
 struct sqlite3;
 
-namespace mhwimmc_db_ns {
+namespace mhwimm_db_ns {
 
   enum class SQL_OP : uint8_t {
     SQL_ADD,
@@ -38,9 +38,9 @@ namespace mhwimmc_db_ns {
     std::string install_date;
   };
 
-  class mhwimmc_db finally {
+  class mhwimm_db finally {
   public:
-    mhwimmc_db(const char *db_name, const char *db_path) =default
+    mhwimm_db(const char *db_name, const char *db_path) =default
       : db_name_(db_name), db_path_(db_path)
     {
       db_handler_ = nullptr;
@@ -52,10 +52,10 @@ namespace mhwimmc_db_ns {
       more_row_indicator_;
     }
 
-    mhwimmc_db(const mhwimmc_db &) =delete;
-    mhwimmc_db &operator=(const mhwimmc_db &) =delete;
-    mhwimmc_db(mhwimmc_db &&) =delete;
-    mhwimmc_db &operator=(mhwimmc_db &&) =delete;
+    mhwimm_db(const mhwimm_db &) =delete;
+    mhwimm_db &operator=(const mhwimm_db &) =delete;
+    mhwimm_db(mhwimm_db &&) =delete;
+    mhwimm_db &operator=(mhwimm_db &&) =delete;
 
     int openDB(void);
     int closeDB(void);
@@ -78,6 +78,8 @@ namespace mhwimmc_db_ns {
       case db_tr_idx::IDX_INSTALL_DATE:
         buf = record_buf_.install_date;
       default:
+        current_status_ = DB_STATUS::DB_ERROR;
+        local_err_msg_ = "db: undefined filed index."
         return -1;
       }
       current_status_ = DB_STATUS::DB_IDLE;
@@ -119,9 +121,9 @@ namespace mhwimmc_db_ns {
     std::string local_err_msg_;
     bool more_row_indicator_;
 
-    constexpr const char *table_name_ = "mhwimmc_db_table";
+    constexpr const char *table_name_ = "mhwimm_db_table";
     constexpr const char *sqlCreateTable_ =
-      "CREATE TABLE mhwimmc_db_table ("
+      "CREATE TABLE mhwimm_db_table ("
       "mod_name CHAR NOT NULL,"
       "mod_path CHAR NOT NULL PRIMARY KEY,"
       "install_date CHAR NOT NULL);";

@@ -1,5 +1,5 @@
-#ifndef _MHWIMMC_CONFIG_H_
-#define _MHWIMMC_CONFIG_H_
+#ifndef _MHWIMM_CONFIG_H_
+#define _MHWIMM_CONFIG_H_
 
 #include <cstddef>
 #include <cstdbool>
@@ -7,7 +7,7 @@
 #include <fstream>
 #include <string>
 
-namespace mhwimmc_config_ns {
+namespace mhwimm_config_ns {
 
   template<typename _StrKeyTp, typename _NumKeyTp>
   struct general_config_types {
@@ -37,7 +37,7 @@ namespace mhwimmc_config_ns {
   struct config_struct : config_struct_traits<_Tp> {
     skey_t userhome;
     skey_t mhwiroot;
-    skey_t mhwimmcroot;
+    skey_t mhwimmroot;
   };
 
   using the_default_config_type =
@@ -67,7 +67,7 @@ namespace mhwimmc_config_ns {
     auto ret = true;
     conf_sink << "USERHOME=" << conf->userhome << "\n"
               << "MHWIROOT=" << conf->mhwiroot << "\n"
-              << "MHWIMMCROOT=" << conf->mhwimmcroot << "\n";
+              << "MHWIMMCROOT=" << conf->mhwimmroot << "\n";
     // if more config options are appended in future,should place them
     // from there
     if (conf_sink.bad())

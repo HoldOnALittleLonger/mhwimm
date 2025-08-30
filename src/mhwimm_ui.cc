@@ -1,8 +1,8 @@
-#include "mhwimmc_ui.h"
+#include "mhwimm_ui.h"
 
-namespace mhwimmc_ui_ns {
+namespace mhwimm_ui_ns {
 
-  ssize_t mhwimmc_ui::readFromUser(void)
+  ssize_t mhwimm_ui::readFromUser(void)
   {
     std::cin >> local_msg_buffer_;
     if (std::cin.bad())

@@ -1,25 +1,25 @@
-#ifndef _MHWIMMC_UI_H_
-#define _MHWIMMC_UI_H_
+#ifndef _MHWIMM_UI_H_
+#define _MHWIMM_UI_H_
 
 #include <iostream>
 #include <string>
 #include <cstddef>
 
-namespace mhwimmc_ui_ns {
+namespace mhwimm_ui_ns {
 
-  class mhwimmc_ui finally {
+  class mhwimm_ui finally {
   public:
-    mhwimmc_ui() :
+    mhwimm_ui() :
       local_msg_buffer_("nil"),
-      prompt_msg_("mhwimmc: "),
+      prompt_msg_("mhwimm: "),
       startup_msg_("Monster Hunter World:Iceborne Mod Manager cmd tool"),
       space_indent_(8)
         {}
 
-    mhwimmc_ui(const mhwimmc_ui &) =delete;
-    mhwimmc_ui(mhwimmc_ui &&) =delete;
-    mhwimmc_ui &operator=(const mhwimmc_ui &) =delete;
-    mhwimmc_ui &operator=(mhwimmc_ui &&) =delete;
+    mhwimm_ui(const mhwimm_ui &) =delete;
+    mhwimm_ui(mhwimm_ui &&) =delete;
+    mhwimm_ui &operator=(const mhwimm_ui &) =delete;
+    mhwimm_ui &operator=(mhwimm_ui &&) =delete;
 
     /**
      * printPrompt - print prompt message on the console
@@ -28,7 +28,7 @@ namespace mhwimmc_ui_ns {
      */
     void printPrompt(void)
     {
-      std::cout<< prompt_msg_ << flush;
+      std::cout << prompt_msg_ << flush;
     }
     
     /* printStartupMsg - print startup msg */
@@ -45,7 +45,7 @@ namespace mhwimmc_ui_ns {
      */
     void printMessage(std::string &msg)
     {
-      std::cout<< msg << flush;
+      std::cout << msg << flush;
     }
 
     /**
@@ -66,11 +66,10 @@ namespace mhwimmc_ui_ns {
     /* printIndentSpaces - print indent */
     void printIndentSpaces(void)
     {
-      auto x(space_indent_);
-      do {
-        std::cout.put(' ');
-      } while (--x);
-      std::cout << flush;
+      char indent[space_indent_ + 1] = {0};
+      for (auto i : space_indent_ - 1)
+        indent[i] = ' ';
+      std::cout << indent << flush;
     }
 
     /* newLine - start a new line */

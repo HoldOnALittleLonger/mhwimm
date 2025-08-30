@@ -1,8 +1,8 @@
-#ifndef _MHWIMMC_CMD_H_
-#define _MHWIMMC_CMD_H_
+#ifndef _MHWIMM_EXECUTOR_H_
+#define _MHWIMM_EXECUTOR_H_
 
-#include "mhwimmc_config.h"
-#include "mhwimmc_sync_types.h"
+#include "mhwimm_config.h"
+#include "mhwimm_sync_mechanism.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -11,20 +11,12 @@
 #include <string>
 #include <list>
 
-namespace mhwimmc_cmd_ns {
+namespace mhwimm_executor_ns {
 
-  using mhwimmc_sync_type_ns::exportToDBCallbackFunc_t;
-  using mhwimmc_sync_type_ns::importFromCallbackFunct_;
-
-  static int nullExportDBCallback(const std::string &name, const std::list<std::string> &records)
-  {
-  }
-
-  static int nullImportDBCallback(const std::string &name, std::list<std::string> &records)
-  {
-  }
-
-  enum class mhwimmc_cmd_cmd {
+  /**
+   * mhwimm_executor_cmd - all supported cmds of executor
+   */
+  enum class mhwimm_executor_cmd {
     CD,
     LS,
     INSTALL,
@@ -32,19 +24,20 @@ namespace mhwimmc_cmd_ns {
     INSTALLED,
     CONFIG,
     EXIT,
+    SET,
     NOP
   };
 
-  enum class mhwimmc_cmd_status {
+  enum class mhwimm_executor_status {
     IDLE,
     WORKING,
     ERROR
   };
 
-  class mhwimmc_cmd finally {
+  class mhwimm_executor finally {
   public:
 
-    explicit mhwimmc_cmd(mhwimmc_config_ns::the_default_config_type *conf) =default
+    explicit mhwimm_executor(mhwimmc_config_ns::the_default_config_type *conf) =default
       : conf_(conf)
       {
         current_cmd_ = NOP;
@@ -53,14 +46,12 @@ namespace mhwimmc_cmd_ns {
         noutput_infos_ = 0;
         is_cmd_has_output_ = false;
         output_info_index_ = 0;
-        exportToDBCallback_ = nullExportDBCallback;
-        importFromDBCallback_ = nullImportDBCallback;
       }
 
-    mhwimmc_cmd(const mhwimmc_cmd &) =delete;
-    mhwimmc_cmd &operator=(const mhwimmc_cmd &) =delete;
-    mhwimmc_cmd(mhwimmc_cmd &&) =delete;
-    mhwimmc_cmd &operator=(mhwimmc_cmd &&) =delete;
+    mhwimm_executor(const mhwimm_executor &) =delete;
+    mhwimm_executor &operator=(const mhwimm_executor &) =delete;
+    mhwimm_executor(mhwimm_executor &&) =delete;
+    mhwimm_executor &operator=(mhwimm_executor &&) =delete;
     
     int parseCMD(const std::string &cmd_string) noexcept;
 
@@ -80,20 +71,6 @@ namespace mhwimmc_cmd_ns {
     }
 
     void clearGetOuputHistory(void) { output_info_index_ = 0; }
-
-    void *registerExportCallback(exportToDBCallbackFunc_t func)
-    {
-      auto x(exportToDBCallback_);
-      exportToDBCallback_ = func;
-      return x;
-    }
-
-    void *registerImportCallback(importFromDBCallbackFunc_t func)
-    {
-      auto x(importFromDBCallback_);
-      importFromDBCallback_ = func;
-      return x;
-    }
 
     auto currentStatus(void) noexcept
     {
@@ -117,6 +94,7 @@ namespace mhwimmc_cmd_ns {
     int installed(void) noexcept;
     int config(void) noexcept;
     int exit(void) noexcept;
+    int set(void) noexcept;
 
     void generic_err_msg_output(const std::string &err_msg) noexcept
     {
@@ -125,14 +103,10 @@ namespace mhwimmc_cmd_ns {
       is_cmd_has_output_ = true;
     }
 
-    mhwimmc_config_ns::the_default_config_type *conf_;
+    mhwimm_config_ns::the_default_config_type *conf_;
 
-    /* using the export/import callback,we are no longer have to care about db */
-    exportToDBCallbackFunc_t exportToDBCallback_;
-    importFromCallbackFunc_t importFromDBCallback_;
-
-    mhwimmc_cmd_cmd current_cmd_;
-    mhwimmc_cmd_status current_status_;
+    mhwimm_executor_cmd current_cmd_;
+    mhwimm_executor_status current_status_;
 
     std::size_t nparams_;
     std::vector<std::string> parameters_;

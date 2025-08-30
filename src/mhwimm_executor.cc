@@ -1,4 +1,4 @@
-#include "mhwimmc_cmd.h"
+#include "mhwimm_executor.h"
 
 #include <cstring>
 #include <cstdbool>
@@ -12,7 +12,7 @@
 
 extern bool program_exit;
 
-namespace mhwimmc_cmd_ns {
+namespace mhwimm_executor_ns {
 
 #define ERROR_MSG_MEM "error: Failed to allocate memory."
 #define ERROR_MSG_INCFORM "error: Incorrect format."
@@ -29,7 +29,7 @@ namespace mhwimmc_cmd_ns {
     return result;
   };
 
-  int mhwimmc_cmd::parseCMD(const std::string &cmd_string)
+  int mhwimm_executor::parseCMD(const std::string &cmd_string)
   {
     current_status_ = WORKING;
     
@@ -58,6 +58,7 @@ namespace mhwimmc_cmd_ns {
 #define INSTALLED_CMD_KEY 960
 #define CONFIG_CMD_KEY 630
 #define EXIT_CMD_KEY 442
+#define SET_CMD_KEY 236
 
     switch (calculate_key(arg)) {
     case EXIT_CMD_KEY:
@@ -109,7 +110,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int mhwimmc_cmd::executeCurrentCMD(void)
+  int mhwimm_executor::executeCurrentCMD(void)
   {
     noutput_infos_ = 0;
     if (current_status_ & (ERROR  | WORKING))
@@ -137,7 +138,7 @@ namespace mhwimmc_cmd_ns {
     }
   }
 
-  int mhwimmc_cmd::cd(void)
+  int mhwimm_executor::cd(void)
   {
     // "cd" command only receives one parameter
     if (nparams_ != 1) {
@@ -149,7 +150,7 @@ namespace mhwimmc_cmd_ns {
     return ret ? current_status_ = ERROR, -1 : current_status_ = IDLE, 0;
   }
 
-  int mhwimmc_cmd::ls(void)
+  int mhwimm_executor::ls(void)
   {
     // open current work directory
     DIR *this_dir(opendir("."));
@@ -169,7 +170,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int mhwimmc_cmd::exit(void)
+  int mhwimm_executor::exit(void)
   {
     // we does not use concurrent protecting at there,
     // because of that the other control path will change this
@@ -179,7 +180,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int mhwimmc_cmd::config(void)
+  int mhwimm_executor::config(void)
   {
     if (nparams_ != 1) {
       current_status_ = ERROR;
@@ -244,7 +245,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int mhwimmc_cmd::install(void)
+  int mhwimm_executor::install(void)
   {
     // install [ mod name ] [ mod directory ]
     if (nparams_ != 2) {
@@ -361,7 +362,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int mhwimmc_cmd::uninstall(void)
+  int mhwimm_executor::uninstall(void)
   {
     // when removing mods from game root directory,we have to
     // take care of empty directory
@@ -403,7 +404,7 @@ namespace mhwimmc_cmd_ns {
     return 0;
   }
 
-  int mhwimmc_cmd::installed(void)
+  int mhwimm_executor::installed(void)
   {
     current_status_ = WORKING;
     std::list<std::string> db_records_list;
