@@ -15,6 +15,13 @@ namespace mhwimm_executor_ns {
 
   /**
    * mhwimm_executor_cmd - all supported cmds of executor
+   * cd <pathname>
+   * ls
+   * install <mod name>
+   * uninstall <mod name>
+   * installed
+   * config <key>=<value>
+   * exit
    */
   enum class mhwimm_executor_cmd {
     CD,
@@ -24,7 +31,6 @@ namespace mhwimm_executor_ns {
     INSTALLED,
     CONFIG,
     EXIT,
-    SET,
     NOP
   };
 
@@ -43,7 +49,7 @@ namespace mhwimm_executor_ns {
         current_cmd_ = NOP;
         current_status_ = IDLE;
         nparams_ = 0;
-        noutput_infos_ = 0;
+        noutput_msgs_ = 0;
         is_cmd_has_output_ = false;
         output_info_index_ = 0;
       }
@@ -54,16 +60,15 @@ namespace mhwimm_executor_ns {
     mhwimm_executor &operator=(mhwimm_executor &&) =delete;
     
     int parseCMD(const std::string &cmd_string) noexcept;
-
     int executeCurrentCMD(void) noexcept;
 
     int getCMDOutput(std::string &buf) noexcept
     {
-      if (output_info_index_ == noutput_infos_)
+      if (output_info_index_ == noutput_msgs_)
         is_cmd_has_output_ = false;
 
-      if (is_cmd_has_output_ && output_info_index_ < noutput_infos_) {
-        buf = cmd_output_infos_[output_info_index_++];
+      if (is_cmd_has_output_ && output_info_index_ < noutput_msgs_) {
+        buf = cmd_output_msgs_[output_info_index_++];
         return 0;
       }
       clearGetOutputHistory();
@@ -98,8 +103,8 @@ namespace mhwimm_executor_ns {
 
     void generic_err_msg_output(const std::string &err_msg) noexcept
     {
-      cmd_output_infos_[0] = err_msg;
-      noutput_infos_ = 1;
+      cmd_output_msgs_[0] = err_msg;
+      noutput_msgs_ = 1;
       is_cmd_has_output_ = true;
     }
 
@@ -111,8 +116,8 @@ namespace mhwimm_executor_ns {
     std::size_t nparams_;
     std::vector<std::string> parameters_;
 
-    std::size_t noutput_infos_;
-    std::vectory<std::string> cmd_output_infos_;
+    std::size_t noutput_msgs_;
+    std::vectory<std::string> cmd_output_msgs_;
     bool is_cmd_has_output_;
 
     std::size_t output_info_index_;

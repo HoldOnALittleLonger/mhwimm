@@ -15,10 +15,12 @@ extern bool program_exit;
 namespace mhwimm_executor_ns {
 
 #define ERROR_MSG_MEM "error: Failed to allocate memory."
-#define ERROR_MSG_INCFORM "error: Incorrect format."
+#define ERROR_MSG_ERRFORM "error: Incorrect format."
+#define ERROR_MSG_UNKNOWNCMD "error: Unknown cmd."
 #define ERROR_MSG_UNKNOWN " error: Unknown error."
 #define ERROR_MSG_FNOEXIST "error: No such file or directory."
 #define ERROR_MSG_DBREQ_FAILED "error: Database OP failed."
+#define ERROR_MSG_TRAVERSE_DIR "error: Failed to traverse directory."
 
   static calculate_key(const char *cmd_str) -> int32_t
   {
@@ -58,7 +60,6 @@ namespace mhwimm_executor_ns {
 #define INSTALLED_CMD_KEY 960
 #define CONFIG_CMD_KEY 630
 #define EXIT_CMD_KEY 442
-#define SET_CMD_KEY 236
 
     switch (calculate_key(arg)) {
     case EXIT_CMD_KEY:
@@ -112,7 +113,7 @@ namespace mhwimm_executor_ns {
 
   int mhwimm_executor::executeCurrentCMD(void)
   {
-    noutput_infos_ = 0;
+    noutput_msgs_ = 0;
     if (current_status_ & (ERROR  | WORKING))
       return -1;
     current_status_ = WORKING;
@@ -133,8 +134,9 @@ namespace mhwimm_executor_ns {
     case EXIT:
       return exit();
     default:
-      current_status_ = IDLE;
-      return 0;
+      current_status_ = ERROR;
+      generic_err_msg_output(ERROR_MSG_UNKNOWNCMD);
+      return -1;
     }
   }
 
@@ -155,18 +157,18 @@ namespace mhwimm_executor_ns {
     // open current work directory
     DIR *this_dir(opendir("."));
     struct dirent *dir(NULL);
-    noutput_infos_ = 0;
+    noutput_msgs_ = 0;
 
     while ((dir = readdir(DIR))) {
       if (strncmp(dir->d_name, ".", 2) || 
           strncmp(dir->d_name, "..", 3))
         continue;
-      cmd_output_infos_[noutput_infos_++] = std::string{dir->d_name};
+      cmd_output_msgs_[noutput_msgs_++] = std::string{dir->d_name};
     }
+    (void)closedir(this_dir);
 
     current_status_ = IDLE;
     is_cmd_has_output_ = true;
-    (void)closedir(this_dir);
     return 0;
   }
 
@@ -188,17 +190,17 @@ namespace mhwimm_executor_ns {
     }
 
     bool is_correct(false);
-    std::string::iterator equal_pos(parameters_[0].begin());
+    auto equal_pos(parameters_[0].begin());
 
     auto check_if_correct_format = [&, this](void) -> void {
       std::size_t spaces_character(0);
       std::size_t equal_symbol(0);
       for (auto i(equal_pos); i != parameters_[0].end(); ++i) {
-        if (x == '=') {
+        if (*i == '=') {
           ++equal_symbol;
           equal_pos = i;
         }
-        if (x == ' ')
+        if (*i == ' ')
           ++spaces_character;
       }
 
@@ -210,7 +212,7 @@ namespace mhwimm_executor_ns {
     check_if_correct_format();
 
     if (!is_correct) {
-      generic_err_msg_output(ERROR_MSG_INCFORM);
+      generic_err_msg_output(ERROR_MSG_ERRFORM);
       current_status_ = ERROR;
       return -1;
     }
@@ -225,13 +227,13 @@ namespace mhwimm_executor_ns {
 
     switch (calculate_key(key.c_str())) {
     case CONFIG_USERHOME:
-      conf_->userhome = static_cast<typename mhwimmc_config_ns::the_default_config_type::skey_t>(value);
+      conf_->userhome = static_cast<typename mhwimm_config_ns::the_default_config_type::skey_t>(value);
       break;
     case CONFIG_MHWIROOT:
-      conf_->mwhiroot = static_cast<typename mhwimmc_config_ns::the_default_config_type::skey_t>(value);
+      conf_->mwhiroot = static_cast<typename mhwimm_config_ns::the_default_config_type::skey_t>(value);
       break;
     case CONFIG_MHWIMMCROOT:
-      conf_->mwhimmcroot = static_cast<typename mhwimmc_config_ns::the_default_config_type::skey_t>(value);
+      conf_->mwhimmcroot = static_cast<typename mhwimm_config_ns::the_default_config_type::skey_t>(value);
       break;
     default: // unknown config,do nothing
       ;
@@ -249,117 +251,91 @@ namespace mhwimm_executor_ns {
   {
     // install [ mod name ] [ mod directory ]
     if (nparams_ != 2) {
-      generic_err_msg_output(ERROR_MSG_INCFORM);
-      current_status_ = ERROR;
-      return -1;
+      generic_err_msg_output(ERROR_MSG_ERRFORM);
+      goto err_exit;
     }
 
-    const auto &mhwiroot_path(conf_->mhwiroot);
-    char *cwd_path_buf(nullptr);
-    long path_max(pathconf("/", _PC_PATH_MAX));
+    std::string modname(parameters_[0]);
+    std::string moddir(parameters_[1]);
 
-    try {
-      cwd_path_buf = new char[path_max];
-    } catch (std::bad_alloc &ec) {
-      generic_err_msg_output(ERROR_MSG_MEM);
-      current_status_ = ERROR;
-      return -1;
-    }
-    
-    // store current work directory path
-    getcwd(cwd_path_buf, path_max);
-    
-    const std::string &mod_name(parameters_[0]);
-    const std::string &mod_directory(parameters_[1]);
+    /**
+     * lf_traverse_dir - local function used to traverse the directory and makeup mod file list
+     * @parent_dir:      parent directory
+     * return:           0 OR -1
+     * # front-inserting
+     */
+    auto lf_traverse_dir = [](const std::string &parent_dir) -> int {
+      DIR *this_dir = opendir(parent_dir.c_str());
+      if (!DIR) {
+        generic_err_msg_output(ERROR_MSG_OPENDIR);
+        return -1;
+      }
+      mfiles_list_->directory_list.insert(mfiles_list_->directory_list.begin(), parent_dir);
 
-    // get into mod directory
-    errno = 0;
-    if (chdir(mod_directory.c_str()) < 0) {
-      generic_err_msg_output(errno == ENOENT
-                             ? ERROR_MSG_FNOEXIST : ERROR_MSG_UNKNOWN);
-      delete[] cwd_path_buf;
-      current_status_ = ERROR;
-      return -1;
-    }
+      int ret(0);
 
-    // list used to stores the files path records,
-    // include directory files.
-    std::list<std::string> mod_filepaths_list;
-    std::string mhwiroot(static_cast<std::string>(mhwiroot_path));
-    // temporary string object used during iterating mod directory.
-    std::string tmp_dir(".");
-
-    auto install_mod_files = [&, mhwiroot, tmp_dir](std::string &dir) -> void {
-      DIR *current_dir = opendir(dir.c_str);
-      if (!current_dir)
-        return;
-
-      // an object used to  backup the directory path of
-      // recursion for this time.
-      std::string cwd_backup(dir);
-
-      struct *dirent dirent = NULL;
-
-      while ((dirent = readdir(current_dir))) {
-        // skil current directory and last directory
-        if (strncmp(dirent->d_name, ".", 2) ||
-            strncmp(dirent->d_name, "..", 3))
+      while (struct dirent *dentry = readdir(this_dir)) {
+        // skip this dir and parent dir
+        switch (strlen(dentry->d_name)) {
+        case 1:
+          if (!strncmp(".", dentry->d_name, 1))
+            continue;
+        case 2:
+          if (!strncmp("..", dentry->d_name, 2))
+            continue;
+        }
+        
+        struct stat dentry_stat = {0};
+        if (stat(dentry->d_name, &dentry_stat) < 0) {
+          ret = -1;
+          break;
+        } else if (dentry_stat.st_mode & S_IFDIR) {
+          return lf_traverse_dir(parent_dir + "/" + dentry->d_name);
+        } else if (dentry_stat.st_mode & S_IFLINK)
           continue;
 
-        // build file path record
-        std::string tmp_full_path(mhwiroot);
-        tmp_full_path += "/";
-        if (dir != "." ) {
-          // skip "./"
-          auto tmpstr(dir);
-          if (tmpstr.substr(0, 2) == "./")
-            tmpstr = tmpstr.substr(3, tmpstr.end() - tmpstr.begin() - 2);
-          tmp_full_path += tmpstr;
-          tmp_full_path += "/";
-        }
-
-        tmp_full_path += dirent->d_name;
-
-        if (dirent->d_type == DT_REG) {
-          link((dir + dirent->d_name).c_str(), tmp_full_path.c_str());
-          mod_filepaths_list.insert(tmp_full_path);
-        } else if (dirent->d_type == DT_DIR) {
-          link((dir + dirent->d_name).c_str(), tmp_full_path.c_str());
-          mod_filepaths_list.insert(tmp_full_path);
-
-          // recursive to subdir
-          dir += "/";
-          dir += dirent->d_name;
-          install_mod_files(dir);
-
-          dir = cwd_backup;
-        }
-
+        // regular file
+        mfiles_list_->regular_file_list.insert(mfiles_list_->regular_file_list.begin(),
+                                               std::string{parent_dir + "/" + dentry->d_name});
       }
 
-      closedir(current_dir);
+      (void)closedir(this_dir);
+      return ret;
     };
 
-    install_mod_files(tmp_dir);
-
-    current_status_ = IDEL;
-
-    // switch cwd to the old path
-    chdir(cwd_path_buf);
-    delete[] cwd_path_buf;
-
-    // we just invoke the callback to export all file path infos
-    // to the DB module
-    if (exportToDBCallback(mod_name, mod_filepaths_list) < 0) {
-      generic_err_msg_output(
-                             std::string{ERROR_DBREQ_FAILED} +
-                             "mod name : " + parameters_[1] +
-                             " - please remove the mod manually.");
-      current_status_ = ERROR;
-      return -1;
+    // now we have to traverse the mod directory to makeup file list
+    std::unique_lock<decltype(mfiles_list_->lock)> mfl_lock(&mfiles_list_->lock);
+    if (lf_traverse_dir(moddir) < 0) {
+      generic_err_msg_output(ERROR_MSG_TRAVERSE_DIR);
+      goto err_exit;
     }
 
+    mfiles_list_->directory_list.reverse();
+    mfiles_list_->regular_file_list.reverse();
+
+    auto mhwiroot(conf_->mhwiroot);
+
+    // link directories
+    for (auto i : mfiles_list_->directory_list) {
+      if (link(i.c_str(), (mhwiroot + "/" + i).c_str()) < 0)
+        goto err_exit;
+    }
+
+    // link regular files
+    for (auto i : mfiles_list_->regular_file_list) {
+      if (link(i.c_str(), (mhwiroot + "/" + i).c_str()) < 0)
+        goto err_exit;
+    }
+
+    // now we have to issue SQL request for add records.
+    // if SQL resulted in failure,then we must unlink the files
+    // we have been linked previously.
+
+    current_status_ = mhwimm_executor_status::IDLE;
     return 0;
+  err_exit:
+    current_status_ = mhwimm_executor_status::ERROR;
+    return - 1;
   }
 
   int mhwimm_executor::uninstall(void)
@@ -413,9 +389,9 @@ namespace mhwimm_executor_ns {
       current_status_ = ERROR;
       return -1;
     }
-    noutput_infos_ = 0;
+    noutput_msgs_ = 0;
     for (auo x : db_records_list) {
-      cmd_output_infos_[noutput_infos++] = x;
+      cmd_output_msgs_[noutput_infos++] = x;
     }
     is_cmd_has_output_ = true;
     current_status_ = IDLE;

@@ -37,11 +37,11 @@ namespace mhwimm_sync_mechanism_ns {
     std::mutex lock;
   };
 
-  /* exedb_sync_mutex - mutex used to make synchronization between Executor and DB */
-  extern std::mutex exedb_sync_mutex;
-
   /* program_exit - value used to indicates whether the program should stop */
   extern atomic_t program_exit;
+
+  /* exedb_sync_mutex - mutex used to make synchronization between Executor and DB */
+  extern std::mutex exedb_sync_mutex;
 
   /* is_db_op_succeed - indicate whether the last db operation is succeed */
   extern bool is_db_op_succeed;
