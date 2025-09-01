@@ -10,17 +10,19 @@
 #include <dirent.h>
 #include <errno.h>
 
-extern bool program_exit;
-
 namespace mhwimm_executor_ns {
 
 #define ERROR_MSG_MEM "error: Failed to allocate memory."
+#define ERROR_MSG_CHDIR "error: Failed enter the directory."
 #define ERROR_MSG_ERRFORM "error: Incorrect format."
 #define ERROR_MSG_UNKNOWNCMD "error: Unknown cmd."
-#define ERROR_MSG_UNKNOWN " error: Unknown error."
+#define ERROR_MSG_UNKNOWNCONF "error: Unknown conf."
 #define ERROR_MSG_FNOEXIST "error: No such file or directory."
 #define ERROR_MSG_DBREQ_FAILED "error: Database OP failed."
 #define ERROR_MSG_TRAVERSE_DIR "error: Failed to traverse directory."
+#define ERROR_MSG_LINK "error: Failed to install mod."
+#define ERROR_MSG_UNLINK "error: Failed to uninstall mod."
+#define ERROR_MSG_UNINITIALIZED "error: Executor uninitialized."
 
   static calculate_key(const char *cmd_str) -> int32_t
   {
@@ -33,7 +35,10 @@ namespace mhwimm_executor_ns {
 
   int mhwimm_executor::parseCMD(const std::string &cmd_string)
   {
-    current_status_ = WORKING;
+    current_status_ = mhwimm_executor_status::WORKING;
+
+    // clear all elements in the vector.
+    parameters_.clear();
     
     char *cmd_tmp_buf(nullptr);
     std::size_t buf_length(cmd_string.length() + 1);
@@ -42,7 +47,7 @@ namespace mhwimm_executor_ns {
       cmd_tmp_buf = new char[buf_length];
     } catch (std::bad_alloc &err) {
       generic_err_msg_output(ERROR_MSG_MEM);
-      current_status_ = ERROR;
+      current_status_ = mhwimm_executor_status::ERROR;
       return -1;
     }
 
@@ -53,51 +58,35 @@ namespace mhwimm_executor_ns {
 
     bool parse_more(false);
 
-#define CD_CMD_KEY 199
-#define LS_CMD_KEY 223
-#define INSTALL_CMD_KEY 759
-#define UNINSTALL_CMD_KEY 986
-#define INSTALLED_CMD_KEY 960
-#define CONFIG_CMD_KEY 630
-#define EXIT_CMD_KEY 442
-
     switch (calculate_key(arg)) {
     case EXIT_CMD_KEY:
-      current_cmd_ = EXIT;
+      current_cmd_ = mhwimm_executor_cmd::EXIT;
       break;
     case LS_CMD_KEY:
-      current_cmd_ = LS;
+      current_cmd_ = mhwimm_executor_cmd::LS;
       break;
     case INSTALLED_CMD_KEY:
-      current_cmd_ = INSTALLED;
+      current_cmd_ = mhwimm_executor_cmd::INSTALLED;
       break;
     case CD_CMD_KEY:
-      current_cmd_ = CD;
+      current_cmd_ = mhwimm_executor_cmd::CD;
       parse_more = true;
       break;
     case INSTALL_CMD_KEY:
-      cuurrent_cmd_ = INSTALL;
+      cuurrent_cmd_ = mhwimm_executor_cmd::INSTALL;
       parse_more = true;
       break;
     case UNINSTALL_CMD_KEY:
-      current_cmd_ = UNINSTALL;
+      current_cmd_ = mhwimm_executor_cmd::UNINSTALL;
       parse_more = true;
       break;
     case CONFIG_CMD_KEY:
-      current_cmd_ = CONFIG;
+      current_cmd_ = mhwimm_executor_cmd::CONFIG;
       parse_more = true;
       break;
     default:
-      current_cmd_ = NOP;
+      current_cmd_ = mhwimm_executor_cmd::NOP;
     }
-
-#undef CD_CMD_KEY
-#undef LS_CMD_KEY
-#undef INSTALL_CMD_KEY
-#undef UNINSTALL_CMD_KEY
-#undef INSTALLED_CMD_KEY
-#undef CONFIG_CMD_KEY
-#undef EXIT_CMD_KEY
 
     if (parse_more) {
       nparams_ = 0; // reset number of parameters
@@ -106,68 +95,113 @@ namespace mhwimm_executor_ns {
       }
     }
 
-    current_status_ = IDLE;
+    current_status_ = mhwimm_executor_status::IDLE;
     delete[] cmd_tmp_buf;
     return 0;
   }
 
   int mhwimm_executor::executeCurrentCMD(void)
   {
-    noutput_msgs_ = 0;
-    if (current_status_ & (ERROR  | WORKING))
+    if (current_status_ & (mhwimm_executor_status::ERROR  |
+                           mhwimm_executor_status::WORKING))
       return -1;
-    current_status_ = WORKING;
+
+    current_status_ = mhwimm_executor_status::WORKING;
+
+    if (!is_initialized()) {
+      current_status_ = mhwimm_executor_status::ERROR;
+      generic_err_msg_output(ERROR_MSG_UNINITIALIZED);
+      return -1;
+    }
+
+
+    noutput_msgs_ = 0;
 
     switch (current_cmd_) {
-    case CD:
-      return cd();
-    case LS:
-      return ls();
-    case INSTALL:
-      return install();
+    case mhwimm_executor_cmd::CD:
+      if (cmd_cd_syntaxChecking())
+        return cd();
+      goto err_syntax;
+    case mhwimm_executor_cmd::LS:
+      if (cmd_ls_syntaxChecking())
+        return ls();
+      goto err_syntax;
+    case mhwimm_executor_cmd::INSTALL:
+      if (cmd_install_syntaxChecking())
+        return install();
+      goto err_syntax;
     case UNINSTALL:
-      return uninstall();
-    case INSTALLED:
-      return installed();
-    case CONFIG:
-      return config();
-    case EXIT:
-      return exit();
+      if (cmd_uninstall_syntaxChecking())
+        return mhwimm_executor_cmd::uninstall();
+      goto err_syntax;
+    case mhwimm_executor_cmd::INSTALLED:
+      if (cmd_uninstall_syntaxChecking())
+        return installed();
+      goto err_syntax;
+    case mhwimm_executor_cmd::CONFIG:
+      if (cmd_config_syntaxChecking())
+        return config();
+      goto err_syntax;
+    case mhwimm_executor_cmd::EXIT:
+      if (cmd_exit_syntaxChecking())
+        return exit();
+      goto err_syntax;
     default:
-      current_status_ = ERROR;
+      current_status_ = mhwimm_executor_status::ERROR;
       generic_err_msg_output(ERROR_MSG_UNKNOWNCMD);
       return -1;
     }
+
+  err_syntax:
+    generic_err_msg_output(ERROR_MSG_ERRFORM);
+    current_status_ = mhwimm_executor_status::ERROR;
+    return -1;
   }
 
   int mhwimm_executor::cd(void)
   {
-    // "cd" command only receives one parameter
-    if (nparams_ != 1) {
-      current_status_ = ERROR;
+    current_status_ = mhwimm_executor_status::WORKING;
+    if (chdir(parameters_[0].c_str()) < 0) {
+      generic_err_msg_output(ERROR_MSG_CHDIR);
+      current_status_ = mhwimm_executor_status::ERROR;
       return -1;
     }
-
-    int ret(chdir(parameters_[0].c_str));
-    return ret ? current_status_ = ERROR, -1 : current_status_ = IDLE, 0;
+    current_status_ = mhwimm_executor_status::IDLE;
+    return 0;
   }
 
   int mhwimm_executor::ls(void)
   {
+    current_status_ = mhwimm_executor_status::WORKING;
+
     // open current work directory
-    DIR *this_dir(opendir("."));
+    DIR *this_dir(NULL);
+    if (!(this_dir = opendir("."))) {
+      generic_err_msg_output(ERROR_MSG_OPENDIR);
+      current_status_ = mhwimm_executor_status::ERROR;
+      return -1;
+    }
+
     struct dirent *dir(NULL);
     noutput_msgs_ = 0;
 
-    while ((dir = readdir(DIR))) {
-      if (strncmp(dir->d_name, ".", 2) || 
-          strncmp(dir->d_name, "..", 3))
-        continue;
-      cmd_output_msgs_[noutput_msgs_++] = std::string{dir->d_name};
+    while ((dentry = readdir(DIR))) {
+
+      switch(strlen(dentry->d_name)) {
+      case 1:
+        if ((*(dentry->d_name)) == '.')
+          continue;
+      case 2:
+        if ((*(dentry->d_name)) == '.' &&
+            (*(dentry->d_name + 1)) == '.')
+          continue;
+      }
+
+      cmd_output_msgs_[noutput_msgs_++] = std::string{dentry->d_name};
     }
     (void)closedir(this_dir);
 
-    current_status_ = IDLE;
+    current_status_ = mhwimm_executor_status::IDLE;
     is_cmd_has_output_ = true;
     return 0;
   }
@@ -178,52 +212,20 @@ namespace mhwimm_executor_ns {
     // because of that the other control path will change this
     // indicator is the signal handler
     program_exit = true;
-    current_status_ = IDLE;
+    current_status_ = mhwimm_executor_status::IDLE;
     return 0;
   }
 
   int mhwimm_executor::config(void)
   {
-    if (nparams_ != 1) {
-      current_status_ = ERROR;
-      return -1;
-    }
-
-    bool is_correct(false);
-    auto equal_pos(parameters_[0].begin());
-
-    auto check_if_correct_format = [&, this](void) -> void {
-      std::size_t spaces_character(0);
-      std::size_t equal_symbol(0);
-      for (auto i(equal_pos); i != parameters_[0].end(); ++i) {
-        if (*i == '=') {
-          ++equal_symbol;
-          equal_pos = i;
-        }
-        if (*i == ' ')
-          ++spaces_character;
-      }
-
-      if (equal_symbol != 1 || spaces_character)
-        is_correct = false;
-      is_correct = true;
-    };
-
-    check_if_correct_format();
-
-    if (!is_correct) {
-      generic_err_msg_output(ERROR_MSG_ERRFORM);
-      current_status_ = ERROR;
-      return -1;
-    }
-
-    std::string key(parameters_[0].substr(0, equal_pos - parameters_[0].begin() - 1));
-    std::string value(parameters_[0].substr(equal_pos - parameters_[0].begin() + 1,
-                                            parameters_[0].end() - equal_pos));
-
 #define CONFIG_USERHOME 616
 #define CONFIG_MHWIROOT 633
 #define CONFIG_MHWIMMCROOT 854
+
+    current_status_ = mhwimm_executor_status::WORKING;
+
+    const auto &key(parameters_[0]);
+    const auto &val(parameters_[1]);
 
     switch (calculate_key(key.c_str())) {
     case CONFIG_USERHOME:
@@ -235,16 +237,18 @@ namespace mhwimm_executor_ns {
     case CONFIG_MHWIMMCROOT:
       conf_->mwhimmcroot = static_cast<typename mhwimm_config_ns::the_default_config_type::skey_t>(value);
       break;
-    default: // unknown config,do nothing
-      ;
+    default:
+      generic_err_msg_output(ERROR_MSG_UNKNOWNCONF);
+      current_status_ = mhwimm_executor_status::ERROR;
+      return -1;
     }
+
+    current_status_ = mhwimm_executor_status::IDLE;
+    return 0;
 
 #undef CONFIG_USERHOME
 #undef CONFIG_MHWIROOT
 #undef CONFIG_MHWIMMCROOT
-
-    current_status_ = IDLE;
-    return 0;
   }
 
   int mhwimm_executor::install(void)
@@ -317,22 +321,31 @@ namespace mhwimm_executor_ns {
 
     // link directories
     for (auto i : mfiles_list_->directory_list) {
-      if (link(i.c_str(), (mhwiroot + "/" + i).c_str()) < 0)
-        goto err_exit;
+      if (link(i.c_str(), (mhwiroot + "/" + i).c_str()) < 0) {
+        generic_err_msg_output(ERROR_MSG_LINK);
+        goto err_exit_unlink_dir;
+      }
     }
 
     // link regular files
     for (auto i : mfiles_list_->regular_file_list) {
-      if (link(i.c_str(), (mhwiroot + "/" + i).c_str()) < 0)
-        goto err_exit;
+      if (link(i.c_str(), (mhwiroot + "/" + i).c_str()) < 0) {
+        generic_err_msg_output(ERROR_MSG_LINK);
+        goto err_exit_unlink_file;
+      }
     }
-
-    // now we have to issue SQL request for add records.
-    // if SQL resulted in failure,then we must unlink the files
-    // we have been linked previously.
 
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
+
+  err_exit_unlink_file:
+    for (auto i : mfiles_list_->regular_file_list)
+      unlink((mhwiroot + "/" + i).c_str());
+
+  err_exit_unlink_dir:
+    for (auto i : mfiles_list_->directory_list)
+      unlink((mhwiroot + "/" + i).c_str());
+
   err_exit:
     current_status_ = mhwimm_executor_status::ERROR;
     return - 1;
@@ -340,61 +353,70 @@ namespace mhwimm_executor_ns {
 
   int mhwimm_executor::uninstall(void)
   {
-    // when removing mods from game root directory,we have to
-    // take care of empty directory
-    // if a directory were not empty but now it is empty because
-    // we removed the mode files,then we should remove this
-    // directory,too
-
     // uninstall [ mod name ]
+    // but Executor does not ask DB to returns records of
+    // mod files.
+    // this work will hand over to worker thread.
+
     if (nparams_ != 1) {
       generic_err_msg_output(ERROR_MSG_INCFORM);
-      current_status_ = ERROR;
+      current_status_ = mhwimm_executor_status::ERROR;
       return -1;
     }
+    current_status_ = mhwimm_executor_status::WORKING;
 
-    std::list<std::string> db_records_list;
-    if (importFromDBCallback(parameters_[0], db_records_list) < 0) {
-      generic_err_msg_output(std::string{ERROR_MSG_DBREQ_FAILED} + "mod name : " + parameters_[1]);
-      current_status_ = ERROR;
+    // acquire list lock
+    std::unique_lock<decltype(mfiles_list_->lock)> mfl_lock(&mfiles_list_->lock);
+
+    /**
+     * step1 : remove all regular files
+     * step2 : remove all directories
+     */
+
+    auto mhwiroot(conf_->mhwiroot);
+
+    uint8_t rf_err(0);
+    for (auto i : mfiles_list_->regular_file_list) {
+      if (unlink((mhwiroot + "/" + i).c_str()) < 0)
+        rf_err = 1;
+    }
+
+    uint8_t d_err(0);
+    for (auto i : mfiles_list_->directory_list) {
+      if (unlink((mhwiroot + "/" + i).c_str()) < 0)
+        d_err = 1;
+    }
+
+    if (rf_err || d_err) {
+      generic_err_msg_output(ERROR_MSG_UNLINK);
+      current_status_ = mhwimm_executor_status::ERROR;
       return -1;
     }
-
-    // first walk-through removes all regular files
-    for (auto it(db_records_list.begin()); it != db_records_list.end(); ++it) {
-      struct stat file_stat = 0;
-      int ret = stat(it->c_str(), &file_stat);
-      if (ret < 0)
-        continue;
-      else if (S_ISREG(file_stat.st_mode)) {
-        unlink(it->c_str());
-        db_records_list.erase(it);
-      }
-    }
-
-    // second walk-through removes all directories
-    for (auto x : db_records_list)
-      rmdir(x.c_str());
-
-    current_status_ = IDLE;
+    
+    current_status_ = mhwimm_executor_status::IDLE;
     return 0;
   }
 
   int mhwimm_executor::installed(void)
   {
-    current_status_ = WORKING;
-    std::list<std::string> db_records_list;
-    if (importFromDBCallback("*", db_records_list) < 0) {
-      generic_err_msg(ERROR_DBREQ_FAILED);
-      current_status_ = ERROR;
-      return -1;
+    // because Executor do not interactive with DB,
+    // thus worker must ask DB to returns the installed
+    // mods list.
+    current_status_ = mhwimm_executor_status::WORKING;
+
+    std::unique_lock<decltype(mfiles_list_->lock)> mfl_lock(&mfiles_list_->lock);
+    noutput_msgs_ = mfiles_list_->mod_name_list.size();
+    if (!noutput_msgs_) {
+      cmd_output_msgs_[noutput_infos++] = "No mods been installed.";
+    } else {
+      uint8_t idx(0);
+      for (auto e : mfiles_list_->mod_name_list) {
+        cmd_output_msgs_[idx++] = e;
+      }
     }
-    noutput_msgs_ = 0;
-    for (auo x : db_records_list) {
-      cmd_output_msgs_[noutput_infos++] = x;
-    }
+
     is_cmd_has_output_ = true;
-    current_status_ = IDLE;
+    current_status_ = mhwimm_executor_status::IDLE;
     return 0;
   }
 }

@@ -44,7 +44,7 @@ namespace mhwimm_executor_ns {
   public:
 
     explicit mhwimm_executor(mhwimmc_config_ns::the_default_config_type *conf) =default
-      : conf_(conf)
+      : conf_(conf), mfiles_list_(nullptr)
       {
         current_cmd_ = NOP;
         current_status_ = IDLE;
@@ -58,6 +58,11 @@ namespace mhwimm_executor_ns {
     mhwimm_executor &operator=(const mhwimm_executor &) =delete;
     mhwimm_executor(mhwimm_executor &&) =delete;
     mhwimm_executor &operator=(mhwimm_executor &&) =delete;
+
+    // we need two external pointers
+    // the first is : pointer to config structure
+    // the second is : pointer to mod file list structure
+    bool is_initialized(void) { return bool(mfiles_list_); }
     
     int parseCMD(const std::string &cmd_string) noexcept;
     int executeCurrentCMD(void) noexcept;
@@ -86,8 +91,10 @@ namespace mhwimm_executor_ns {
 
     void resetStatus(void) noexcept
     {
-      current_status_ = IDLE;
+      current_status_ = mhwimm_executor_status::IDLE;
     }
+
+    void setMFLImpl(struct mod_files_list *mfl) { mfiles_list_ = mfl; }
 
   private:
 
@@ -99,7 +106,50 @@ namespace mhwimm_executor_ns {
     int installed(void) noexcept;
     int config(void) noexcept;
     int exit(void) noexcept;
-    int set(void) noexcept;
+
+    bool syntaxChecking(std::size_t req_nparams)
+    {
+      return nparams_ == req_nparams;
+    }
+
+    bool cmd_cd_syntaxChecking(void) { return syntaxChecking(1); }
+    bool cmd_ls_syntaxChecking(void) { return true; }
+    bool cmd_install_syntaxChecking(void) { return syntaxChecking(2); }
+    bool cmd_uninstall_syntaxChecking(void) { return syntaxChecking(1); }
+    bool cmd_installed_syntaxChecking(void) { return true; }
+    bool cmd_config_syntaxChecking(void) {
+      // first,must have "key = value" pair
+      if (!syntaxChecking(1))
+        return false;
+
+      // second,checks if the pair is correct format
+      std::size_t nspace_character(0);
+      std::size_t nequal_character(0);
+      auto equal_pos(parameters_[0].begin());
+
+      for (auto idx(equal_pos); idx != parameters_[0].end(); ++idx) {
+        char c(*idx);
+        if (c == ' ')
+          ++nspace_character;
+        else if (c == '=') {
+          ++nequal_character;
+          equal_pos = idx;
+        }
+      }
+
+      if (nspace_character || nequal_character > 1)
+        return false;
+
+      // third,splite "key=value" pair to two parameters
+      std::string key(parameters_[0].substr(0, equal_pos - parameters_[0].begin() - 1));
+      std::string val(parameters_[0].substr(equal_pos - parameters_[0].begin() + 1,
+                                            parameters_[0].end() - equal_pos));
+
+      parameters_[0] = key;
+      parameters_[1] = val;
+      return true;
+    }
+    bool cmd_exit_syntaxChecking(void) { return true; }
 
     void generic_err_msg_output(const std::string &err_msg) noexcept
     {
@@ -109,6 +159,7 @@ namespace mhwimm_executor_ns {
     }
 
     mhwimm_config_ns::the_default_config_type *conf_;
+    struct mod_files_list *mfiles_list_;
 
     mhwimm_executor_cmd current_cmd_;
     mhwimm_executor_status current_status_;

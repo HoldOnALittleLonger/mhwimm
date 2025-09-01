@@ -31,9 +31,17 @@ namespace mhwimm_sync_mechanism_ns {
     std::mutex lock;
   };
 
+  /**
+   * mod_files_list - structure used to store mod file info
+   * @regular_file_list:    regular file list
+   * @directory_list:       directory list
+   * @mod_name_list:        mod name list from DB
+   * @lock:                 concurrent access protection
+   */
   struct mod_files_list {
     std::list<std::string> regular_file_list;
     std::list<std::string> directory_list;
+    std::list<std::string> &mod_name_list = directory_list;
     std::mutex lock;
   };
 
