@@ -51,6 +51,15 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
   exe.setMFLImpl(&mfiles_list);
 
   for (; ;) {
+    exe.resetStatus();
+
+    // clear containers.
+    mfiles_list.lock.lock();
+    mfiles_list.regular_file_list.clear();
+    mfiles_list.directory_list.clear();
+    mfiles_list.mod_name_list.clear();
+    mfiles_list.lock.unlock();
+
     if (program_exit) // shall we stop and exit?
       break;
 

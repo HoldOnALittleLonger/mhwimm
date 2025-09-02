@@ -22,7 +22,6 @@ namespace mhwimm_executor_ns {
 #define ERROR_MSG_TRAVERSE_DIR "error: Failed to traverse directory."
 #define ERROR_MSG_LINK "error: Failed to install mod."
 #define ERROR_MSG_UNLINK "error: Failed to uninstall mod."
-#define ERROR_MSG_UNINITIALIZED "error: Executor uninitialized."
 
   static calculate_key(const char *cmd_str) -> int32_t
   {
@@ -107,14 +106,6 @@ namespace mhwimm_executor_ns {
       return -1;
 
     current_status_ = mhwimm_executor_status::WORKING;
-
-    if (!is_initialized()) {
-      current_status_ = mhwimm_executor_status::ERROR;
-      generic_err_msg_output(ERROR_MSG_UNINITIALIZED);
-      return -1;
-    }
-
-
     noutput_msgs_ = 0;
 
     switch (current_cmd_) {
@@ -309,13 +300,14 @@ namespace mhwimm_executor_ns {
 
     // now we have to traverse the mod directory to makeup file list
     std::unique_lock<decltype(mfiles_list_->lock)> mfl_lock(&mfiles_list_->lock);
+    mfiles_list_->regular_file_list.clear();
+    mfiles_list_->directory_list.clear();
+
+
     if (lf_traverse_dir(moddir) < 0) {
       generic_err_msg_output(ERROR_MSG_TRAVERSE_DIR);
       goto err_exit;
     }
-
-    mfiles_list_->directory_list.reverse();
-    mfiles_list_->regular_file_list.reverse();
 
     auto mhwiroot(conf_->mhwiroot);
 
@@ -392,7 +384,7 @@ namespace mhwimm_executor_ns {
       current_status_ = mhwimm_executor_status::ERROR;
       return -1;
     }
-    
+
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
   }
