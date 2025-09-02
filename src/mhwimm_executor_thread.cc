@@ -3,116 +3,144 @@
 
 #include <cstddef>
 
-extern int commitDELRequest(const std::string &, const std::list<std::string> &);
-
-using namespace mhwimmc_sync_type_ns;
+/**
+ * regDBop_getAllInstalled_Modsname - register DB operation to get all installed mods'name in
+ *                                    @mfl
+ */
+extern void regDBop_getAllInstalled_Modsname(mhwimm_sync_mechanism_ns::mod_files_list *mfl);
 
 /**
- * mhwimmc_cmd_thread_worker - CMD module control thread
- * @cmd_handler:               CMD module core object handler
- * @exportFunc:                callback function used to export data to DB
- * @importFunc:                callback function used to import data from DB
- * @ucme:                      messsage exchange structure between UI module
- *                             and CMD module
+ * regDBop_getInstalled_Modinfo - register DB operation to get mod info of an especified mod
+ *                                in @mfl
  */
-void mhwimmc_cmd_thread_worker(mhwimmc_cmd_ns::mhwimmc_cmd &cmd_handler,
-                               exportToDBCallbackFunc_t exportFunc,
-                               importFromCallbackFunc_t importFunc,
-                               ucmsgexchg *ucme)
+extern void regDBop_getInstalled_Modinfo(const std::string &modname,
+                                         mhwimm_sync_mechanism_ns::mod_files_list *mfl);
+
+/**
+ * regDBop_add_mod_info - register DB operation to add new records from @mfl
+ *                        for an especified mod
+ */
+extern void regDBop_add_mod_info(const std::string &modname,
+                                 mhwimm_sync_mechanism_ns::mod_files_list *mfl);
+
+/**
+ * regDBop_remove_mod_info - register DB operation to remove records for an especified
+ *                           mod @modname
+ */
+extern void regDBop_remove_mod_info(const std::string &modname);
+
+/**
+ * mhwimm_executor_thread_worker - thread worker for Executor
+ * @exe:                           Executor handler
+ * @ctrlmsg:                       communication between Executor and UI
+ * # the works that this routine will processes :
+ *     1> wait user input on @ctrlmsg
+ *     2> parse command input
+ *     3> if cmd is INSTALL,then send DB request after INSTALL accomplished
+ *     4> if cmd is UNINSTALL,then send DB request for retrive mod records
+ *     5> send command output msg to UI via @ctrlmsg
+ */
+void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
+                                   mhwimm_sync_mechanism_ns::uiexemsgexchg &ctrlmsg,
+                                   mhwimm_sync_mechanism_ns::mod_files_list &mfiles_list)
 {
-  std::unique_lock::unique_lock cdb_locker(&cdbmutex);
 
-  // because these two wrapper functions will be called by INSTALL/UNINSTALL/INSTALLED only,
-  // and the commands will be executed with database mutex acquired,thus
-  // we can simply unlock the mutex to tell DB module deal with request,and lock
-  // the mutex later for get result.
-  auto ExportSyncToDB = [&, exportFunc, cdb_locker]
-    (const std::string &name, const std::list<std::string> &info_list) -> void {
-    exportFunc(name, info_list);
-    cdb_locker.unlock();
-    cdb_locker.lock();
-    int ret = 0;
-    if (!is_db_op_succeed)
-      ret = -1;
-    return ret;
-  };
-
-  // we do not introduce new callback to commit delete operation on DB
-  // since the import from DB routine only be called when process UNINSTALL / INSTALLED,
-  // so we can catch the informations,and then process delete request later in this
-  // control thread if the command is UNINSTALL,not from CMD module handler.
-  std::string caught_mod_name;
-  std::list<std::string> caught_import_data;
-
-  auto ImportSyncToDB = [&, importFunc, cdb_locker]
-    (const std::string &name, std::list<std::string> &info_list) -> void {
-    importFunc(name, info_list);
-    cdb_locker.unlock();
-    cdb_locker.lock();
-    int ret = 0;
-    if (!is_db_op_succeed)
-      ret = -1;
-    caught_mod_name = name;
-    caught_import_data = info_list;
-    return ret;
-  };
-
-  cmd_handler.registerExportCallback(ExportSyncToDB);
-  cmd_handler.registerImportCallback(ImportSyncToDB);
+  using mhwimm_sync_mechanism_ns::UIEXE_STATUS;
+  // lock EXE DB to stop DB event cycle.
+  std::unique_lock<decltype(exedb_sync_mutex)> exedb_lock(&exedb_sync_mutex);
+  exe.setMFLImpl(&mfiles_list);
 
   for (; ;) {
-    if (program_exit)
-      return 0;
+    if (program_exit) // shall we stop and exit?
+      break;
 
-    std::unique_lock::unique_lock uc_locker(&ucmutex);
+    // try to lock ctrl msg object for get user input.
+    std::unique_lock<decltype(ctrlmsg.lock)> exeui_lock(&ctrlmsg.lock);
+    
+    // if the status is not UI_CMD when entered Executor thread,then
+    // there must be a fatal error was encountered.
+    assert(ctrlmsg.status == UIEXE_STATUS::UI_CMD);
 
-    // new command event cycle
-    // reset status
-    // clear output infos
-    cmd_handler.resetStatus();
-    cmd_handler.clearGetOutputHistory();
-
-    int ret = cmd_handler.parseCMD(ucme->io_buf);
-    if (ret < 0) {
-      ucme->status = 1;
-      cmd_handler.getCMDOutput(ucme->io_buf);
+    int ret = exe.parseCMD(ctrlmsg.io_buf);
+    /* we failed to parse command input */
+    if (ret || exe.currentStatus() == mhwimm_executor_status::ERROR) {
+      (void)exe.getCMDOutput(ctrlmsg.io_buf);
+      ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
       continue;
     }
 
-    ret = cmd_handler.executeCurrentCMD();
-    if (ret < 0) {
-      ucme->status = 1;
-      cmd_handler.getCMDOutput(ucme->io_buf);
-      continue;
-    }
-
-    if (cmd_handler.currentCMD() == mhwimmc_cmd_ns::INSTALLED) {
-      // output more than once
-      do {
-        ret = cmd_handler.getCMDOutput(ucme->io_buf);
-        ucme->status = ret < 0 ? 0 : 2;
-        if (ret < 0)
-          break;
-        uc_locker.unlock();
-      } while(uc_locker.lock(), 1);
-    } else if (cmd_handler.currentCMD() == mhwimmc_cmd_ns::UNINSTALL) {
-      // let DB module delete the recoeds
-      commitDELRequest(caught_mod_name, caught_import_data);
-      cdb_locker.unlock();
-      cdb_locker.lock();
+    // we must retrive mod info before execute these two cmds.
+    switch (exe.currentCMD()) {
+    case mhwimm_executor_cmd::INSTALLED:
+      regDBop_getAllInstalled_Modsname(&mfiles_list);
+      exedb_lock.unlock();
+      exedb_lock.lock();
       if (!is_db_op_succeed) {
-        ucme->status = 1;
-        ucme->io_buf = std::string{"error: Failed to delete DB records when process UNINSTALL."};
+        ctrlmsg.io_buf = std::string{"error: Failed to retrive installed mods."};
+        ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
+        continue;
       }
-    } else {
-      ret = cmd_handler.getCMDOutput(ucme->io_buf);
-      if (ret < 0) {
-        // CMD no output
-        ucme->status = 0;
-      } else {
-        ucme->status = 1;
+      break;
+    case mhwimm_executor_cmd::UNINSTALL:
+      {
+        const auto &mod_name(exe.modNameForUNINSTALL());
+        regDBop_getInstalled_Modinfo(mod_name, &mfiles_list);
+        exedb_lock.unlock();
+        exedb_lock.lock();
+        if (!is_db_op_succeed) {
+          ctrlmsg.io_buf = std::string{"error: Failed to retrive mod info from DB."};
+          ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
+          continue;
+        }
+      }
+      break;
+    }
+
+    exe.executeCurrentCMD();
+    if (exe.currentStatus() == mhwimm_executor_status::ERROR) {
+      // encountered error,now have to send error msg to UI.
+      exe.getCMDOutput(ctrlmsg.io_buf);
+      ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
+      continue;
+    }
+
+    // for INSTALL,we have to add new mod's info to DB.
+    // for UNINSTALL,we have to remove the mod's info from DB.
+    switch (exe.currentCMD()) {
+    case mhwimm_executor_cmd::INSTALL:
+      regDBop_add_mod_info(exe.modNameForINSTALL(), &mfiles_list);
+      exedb_lock.unlock();
+      exedb_lock.lock();
+      if (!is_db_op_succeed) {
+        ctrlmsg.io_buf = std::string{"error: Failed to add records to DB."};
+        ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
+        continue;
+      }
+    case mhwimm_executor_cmd::UNINSTALL:
+      regDBop_remove_mod_info(exe.modNameForUNINSTALL());
+      exedb_lock.unlock();
+      exedb_lock.lock();
+      if (!is_db_op_succeed) {
+        ctrlmsg.io_buf = std::string{"error: Failed to remove records from DB."};
+        ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
+        continue;
       }
     }
-        
+
+    // the last command accomplished without any error,now we can send
+    // cmd output to UI.
+    for (; ;) {
+      ret = exe.getCMDOutput(ctrlmsg.io_buf);
+      if (ret) {
+        ctrlmsg.status = UIEXE_STATUS::EXE_NOMSG;
+        break;
+      }
+      ctrlmsg.status = UIEXE_STATUS::EXE_MOREMSG;
+      exeui_lock.unlock();
+      exeui_lock.lock();
+    }
+
   }
+
 }
+

@@ -22,7 +22,7 @@ namespace mhwimm_sync_mechanism_ns {
    *                   1 => Executor module has just one msg to send
    *                   0 => Executor module has no msg to send
    * @io_buf:        message buffer
-   * @mutex_lock:    lock used to protext the object
+   * @lock:          lock used to protext the object
    */
   enum class UIEXE_STATUS : uint8_t { EXE_NOMSG, EXE_ONEMSG, EXE_MOREMSG, UI_CMD };
   struct uiexemsgexchg {

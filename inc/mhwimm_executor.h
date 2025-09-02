@@ -17,7 +17,7 @@ namespace mhwimm_executor_ns {
    * mhwimm_executor_cmd - all supported cmds of executor
    * cd <pathname>
    * ls
-   * install <mod name>
+   * install <mod name> <mod directory>
    * uninstall <mod name>
    * installed
    * config <key>=<value>
@@ -58,11 +58,6 @@ namespace mhwimm_executor_ns {
     mhwimm_executor &operator=(const mhwimm_executor &) =delete;
     mhwimm_executor(mhwimm_executor &&) =delete;
     mhwimm_executor &operator=(mhwimm_executor &&) =delete;
-
-    // we need two external pointers
-    // the first is : pointer to config structure
-    // the second is : pointer to mod file list structure
-    bool is_initialized(void) { return bool(mfiles_list_); }
     
     int parseCMD(const std::string &cmd_string) noexcept;
     int executeCurrentCMD(void) noexcept;
@@ -78,6 +73,16 @@ namespace mhwimm_executor_ns {
       }
       clearGetOutputHistory();
       return -1;
+    }
+
+    const auto &modNameForUNINSTALL(void) {
+      assert(current_cmd_ == mhwimm_executor_cmd::UNINSTALL);
+      return parameters_[0];
+    }
+
+    const auto &modNameForINSTALL(void) {
+      assert(current_cmd_ == mhwimm_executor_cmd::INSTALL);
+      return parameters_[0];
     }
 
     void clearGetOuputHistory(void) { output_info_index_ = 0; }
@@ -157,6 +162,10 @@ namespace mhwimm_executor_ns {
       noutput_msgs_ = 1;
       is_cmd_has_output_ = true;
     }
+
+    // we need two external pointers
+    // the first is : pointer to config structure
+    // the second is : pointer to mod file list structure
 
     mhwimm_config_ns::the_default_config_type *conf_;
     struct mod_files_list *mfiles_list_;
