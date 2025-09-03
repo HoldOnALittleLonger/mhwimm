@@ -10,6 +10,12 @@ struct sqlite3;
 
 namespace mhwimm_db_ns {
 
+  /**
+   * SQL_OP - allowed database operations
+   * ADD:     INSERT
+   * DEL:     DELETE
+   * ASK:     SELECT
+   */
   enum class SQL_OP : uint8_t {
     SQL_ADD,
     SQL_DEL,
@@ -25,17 +31,30 @@ namespace mhwimm_db_ns {
 
   enum class db_tr_idx : uint8_t {
     IDX_MOD_NAME = 1,
-    IDX_MOD_PATH,
+    IDX_FILE_PATH,
     IDX_INSTALL_DATE
   };
 
+  /**
+   * db_table_record - [mod name] [file path] [install date]
+   * # when processing SQL operations,these three fields are used
+   *   as filters.
+   * # when processing SQL_ADD,three fields can not be NULL.
+   */
   struct db_table_record {
-    uint8_t mod_name_is_set:1;
+    uint8_t is_mod_name_set:1;
     std::string mod_name;
-    uint8_t mod_path_is_set:1;
-    std::string mod_path;
-    uint8_t install_date_is_set:1;
+    uint8_t is_file_path_set:1;
+    std::string file_path;
+    uint8_t is_install_date_set:1;
     std::string install_date;
+  };
+
+  enum INTEREST_FIELD : uint8_t {
+    NO_INTEREST = 0,
+    INTEREST_NAME = 1,
+    INTEREST_PATH,
+    INTEREST_DATE
   };
 
   class mhwimm_db finally {
@@ -49,7 +68,7 @@ namespace mhwimm_db_ns {
       current_status_ = DB_STATUS::DB_IDLE;
       record_buf_ = db_table_record{0};
       local_err_msg_ = "nil";
-      more_row_indicator_;
+      more_row_indicator_ = flase;
     }
 
     mhwimm_db(const mhwimm_db &) =delete;
@@ -72,14 +91,14 @@ namespace mhwimm_db_ns {
       case db_tr_idx::IDX_MOD_NAME:
         buf = record_buf_.mod_name;
         break;
-      case db_tr_idx::IDX_MOD_PATH:
-        buf = record_buf_.mod_path;
+      case db_tr_idx::IDX_FILE_PATH:
+        buf = record_buf_.file_path;
         break;
       case db_tr_idx::IDX_INSTALL_DATE:
         buf = record_buf_.install_date;
       default:
         current_status_ = DB_STATUS::DB_ERROR;
-        local_err_msg_ = "db: undefined filed index."
+        local_err_msg_ = "db: error: undefined filed index."
         return -1;
       }
       current_status_ = DB_STATUS::DB_IDLE;
@@ -102,12 +121,15 @@ namespace mhwimm_db_ns {
     {
       current_status_ = DB_STATUS::DB_IDLE;
       current_op_ = SQL_OP::NOP;
+      record_buf_ = {0};
     }
 
     void getDBErrMsg(std::string &outside_buf)
     {
+      current_status_ = DB_STATUS::DB_WORKING;
       if (current_status_ == DB_STATUS::DB_ERROR)
         outside_buf = local_err_msg_;
+      current_status_ = DB_STATUS::DB_IDEL;
     }
 
   private:
@@ -122,12 +144,13 @@ namespace mhwimm_db_ns {
     bool more_row_indicator_;
 
     constexpr const char *table_name_ = "mhwimm_db_table";
+
+    /* we must create table at the first time */
     constexpr const char *sqlCreateTable_ =
       "CREATE TABLE mhwimm_db_table ("
       "mod_name CHAR NOT NULL,"
       "mod_path CHAR NOT NULL PRIMARY KEY,"
       "install_date CHAR NOT NULL);";
-
   };
 
 }

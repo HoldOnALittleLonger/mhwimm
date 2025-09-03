@@ -11,6 +11,8 @@
 /* C99 standard */
 typedef int atomic_t;
 
+class mhwimm_db;
+
 namespace mhwimm_sync_mechanism_ns {
 
   /**
@@ -53,6 +55,17 @@ namespace mhwimm_sync_mechanism_ns {
 
   /* is_db_op_succeed - indicate whether the last db operation is succeed */
   extern bool is_db_op_succeed;
+
+  /* db_impl - pointer to mhwimm_db class entity used by register DB operation routines */
+  extern mhwimm_db *db_impl;
+
+  extern void regDBop_getAllInstalled_Modsname(mhwimm_sync_mechanism_ns::mod_files_list *mfl);
+  extern void regDBop_getInstalled_Modinfo(const std::string &modname,
+                                           mhwimm_sync_mechanism_ns::mod_files_list *mfl);
+  extern void regDBop_add_mod_info(const std::string &modname,
+                                   mhwimm_sync_mechanism_ns::mod_files_list *mfl);
+  extern void regDBop_remove_mod_info(const std::string &modname);
+  extern void init_regDB_routines(mhwimm_db *db_impl);
 }
 
 #endif

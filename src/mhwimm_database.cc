@@ -11,7 +11,7 @@ namespace mhwimmc_db_ns {
     current_status_ = DB_STATUS::DB_IDLE;
     ret = ret != SQLITE_OK ? -1 : 0;
     if (ret < 0) {
-      current_status_ = DB_STATUS::DB_IDLE;
+      current_status_ = DB_STATUS::DB_ERROR;
       local_err_msg_ = "db: error: failed to open database.";
     }
     return ret;
@@ -65,10 +65,12 @@ namespace mhwimmc_db_ns {
   {
     current_status_ = DB_STATUS::DB_WORKING;
 
+    // no SQL operation specified.
     if (current_op_ == SQL_OP::SQL_NOP) {
       current_status_ = DB_STATUS::DB_IDLE;
       return 0;
     }
+
     if (more_row_indicator_)
       goto more_row;
 
@@ -77,15 +79,32 @@ namespace mhwimmc_db_ns {
     std::string INSERT(std::string{"INSERT INTO "} + table_name_);
     std::string DELETE(std::string{"DELETE FROM "} + table_name_);
 
+    /**
+     * construct_stmt_with_where_cond - construct SQL statement with additional logical LINK symbol
+     * @sqlstmt:                        SQL statement in C++-style string
+     * @LINK:                           SQL logical LINK symbol,it could be
+     *                                    AND, OR
+     */
     auto construct_stmt_with_where_cond = [&, record_buf_](std::string &sqlstmt, const char *LINK)
       ->void {
-      if (record_buf_.mod_name_is_set || record_buf_.mod_path_is_set ||
-          record_buf_.install_date_is_set)
-        sqlstmt += " WHERE mod_name = $key1 " + LINK + " mod_path = $key2 " +
-          LINK + " install_date = $key3;";
+      sqlstmt += " WHERE ";
+
+      if (record_buf_.is_mod_name_set)
+        sqlstmt += " mod_name = $key1 ";
+
+      if (record_buf_.is_mod_name_set && record_buf_.is_file_path_set)
+        (sqlstmt += LINK) += " file_path = $key2 ";
       else
-        sqlstmt += ";";
+        sqlstmt += " file_path = $key2 ";
+
+      if (record_buf_.is_file_path_set && record_buf_.is_install_date_set)
+        (sqlstmt += LINK) += " install_date = $key3 ";
+      else
+        sqlstmt += " install_date = $key3 ";
+
+      sqlstmt += ";";
     };
+
     auto construct_select = [&](const char *LINK) -> void {
       construct_stmt_with_where_cond(SELECT, LINK);
     };
@@ -93,15 +112,16 @@ namespace mhwimmc_db_ns {
       construct_stmt_with_where_cond(DELETE, LINK);
     };
 
+    /* INSERT command no WHERE substatement */
     auto construct_insert = [&](void) -> void {
-      INSERT += " (mod_name, mod_path, install_date) VALUES ($key1, $key2, $key3);";
+      INSERT += " (mod_name, file_path, install_date) VALUES ($key1, $key2, $key3);";
     };
 
     int ret = 0;
     switch (current_op_) {
     case SQL_OP::SQL_ADD:
-      if (!record_buf_.mod_name_is_set || !record_buf_.mod_path_is_set ||
-          !record_buf_.install_date_is_set) {
+      if (!record_buf_.is_mod_name_set || !record_buf_.is_file_path_set ||
+          !record_buf_.is_install_date_set) {
         current_status_ = DB_STATUS::DB_ERROR;
         local_err_msg_ = "db: error: lack values to be inserted.";
         return -1;
@@ -132,28 +152,37 @@ namespace mhwimmc_db_ns {
       return -1;
     }
 
-    // from there the sqlite_stmt object have been prepared.
+    // the sqlite_stmt object have been prepared.
     // now we can bind parameters.
     if (current_op_ == SQL_OP::SQL_ADD) {
       ret = 0;
 
       ret |= sqlite3_bind_text(sql_stmt_, 1, record_buf_.mod_name.c_str(), -1,
                               SQLITE_STATIC);
-      ret |= sqlite3_bind_text(sql_stmt_, 2, record_buf_.mod_path.c_str(), -1,
+      ret |= sqlite3_bind_text(sql_stmt_, 2, record_buf_.file_path.c_str(), -1,
                               SQLITE_STATIC);
       ret |= sqlite3_bind_text(sql_stmt_, 3, record_buf_.install_date.c_str(), -1,
                               SQLITE_STATIC);
     } else {
       ret = 0;
-      // unspecified use '*' to instead
-      const char *key_1 = record_buf_.mod_name_is_set ? record_buf_.mod_name.c_str() : "*";
-      const char *key_2 = record_buf_.mod_path_is_set ? record_buf_.mod_path.c_str() : "*";
-      const char *key_3 = record_buf_.install_date_is_set ? record_buf_.install_date.c_str() :
-        "*";
 
-      ret |= sqlite3_bind_text(sql_stmt_, 1, key_1, -1, SQLITE_STATIC);
-      ret |= sqlite3_bind_text(sql_stmt_, 2, key_2, -1, SQLITE_STATIC);
-      ret |= sqlite3_bind_text(sql_stmt_, 3, key_3, -1, SQLITE_STATIC);
+      const char *key_mod_name = record_buf_.mod_name.c_str();
+      const char *key_file_path = record_buf_.file_path.c_str();
+      const char *key_ins_date = record_buf_.install_date.c_str();
+
+      uint8_t key_idx(0);
+
+      key_idx = sqlite3_bind_parameter_index(sql_stmt_, "$key1");
+      if (key_idx)
+        ret |= sqlite3_bind_text(sql_stmt_, key_idx, key_mod_name, -1, SQLITE_STATIC);
+
+      key_idx = sqlite3_bind_parameter_index(sql_stmt_, "$key2");
+      if (key_idx)
+        ret |= sqlite3_bind_text(sql_stmt_, key_idx, key_file_path, -1, SQLITE_STATIC);
+
+      key_idx = sqlite3_bind_parameter_index(sql_stmt_, "$key3");
+      if (key_idx)
+        ret |= sqlite3_bind_text(sql_stmt_, key_idx, key_ins_date, -1, SQLITE_STATIC);
     }
 
     if (ret != SQLITE_OK) {
@@ -177,7 +206,6 @@ namespace mhwimmc_db_ns {
       break;
     case SQL_OP::SQL_ASK:
       goto more_row;
-    default:;
     }
 
   complete_executing:
@@ -195,11 +223,10 @@ namespace mhwimmc_db_ns {
     if (ret == SQLITE_ROW) {
       more_row_indicator_ = true;
       record_buf_.mod_name = sqlite3_column_text(sql_stmt_, 0);
-      record_buf_.mod_path = sqlite3_column_text(sql_stmt_, 1);
+      record_buf_.file_path = sqlite3_column_text(sql_stmt_, 1);
       record_buf_.install_date = sqlite3_column_text(sql_stmt_, 2);
       return 0;
-    }
-    else if (ret == SQLITE_DOEN) {
+    } else if (ret == SQLITE_DOEN) {
       goto complete_executing;
     } else {
       current_status_ = DB_STATUS::DB_ERROR;
@@ -208,12 +235,5 @@ namespace mhwimmc_db_ns {
       goto finalize_out;
     }
   }
-
-
-
-
-
-
-
 
 }
