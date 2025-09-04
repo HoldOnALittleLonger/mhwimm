@@ -42,10 +42,6 @@ void regDBop_add_mod_info(const std::string &modname,
 {
   asset(impl != nullptr);
   mfl_for_db = mfl;
-  interest_field =
-    mhwimm_db_ns::INTEREST_FIELD::INTEREST_NAME +
-    mhwimm_db_ns::INTEREST_FIELD::INTEREST_PATH +
-    mhwimm_db_ns::INTEREST_FIELD::INTEREST_DATE;
   mhwimm_db_ns::db_table_record dtr = {
     .is_mod_name_set = 1,
     .mod_name = modname,
@@ -58,9 +54,6 @@ void regDBop_add_mod_info(const std::string &modname,
 /* result set */
 void regDBop_remove_mod_info(const std::string &modname)
 {
-  asset(impl != nullptr);
-  mfl_for_db = mfl;
-  interest_field = mhwimm_db_ns::INTEREST_FIELD::NO_INTEREST;
   mhwimm_db_ns::db_table_record dtr = {
     .is_mod_name_set = 1,
     .mod_name = modname, // as filter

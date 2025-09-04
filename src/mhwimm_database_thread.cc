@@ -6,6 +6,8 @@
 #include <iostream>
 #include <cstdbool>
 
+#include <assert.h>
+
 /* ins_date -  used  by ADD operation for field "install_date" */
 static std::time_t ins_date(0);
 
@@ -102,7 +104,10 @@ void mhwimmc_db_thread_worker(mhwimmc_db_ns::mhwimmc_db &db)
       }
 
     } else if (!ret) {
-      /* no more result can be got. */
+      /**
+       * no more result can be got,method executeDBOperation() returned _zero_,
+       * and in this case,db status must be DB_IDLE.
+       */
       if (interest_field == mhwimm_db_ns::INTEREST_FIELD::INTEREST_NAME)
         mfl_for_db->mod_name_list.reverse();
       else {
@@ -120,13 +125,80 @@ void mhwimmc_db_thread_worker(mhwimmc_db_ns::mhwimmc_db &db)
     std::cerr << err_msg << std::endl;
   };
 
-  auto do_DB_add = [&, interest_field, mfl_for_db](void) -> void {
+  /* ADD - no result return */
+  auto do_DB_add = [&, mfl_for_db](void) -> void {
+    ins_date = time(NULL);
+    std::string date(ctime(&ins_date));
+    std::string date = date.substr(0, date.length() - 1);
+    
+    /* because regDBop been specified,we have retrieve it */
+    mhwimm_db_ns::db_table_record dtr = {
+      .is_mod_name_set = 1,
+      .mod_name = db.currentSelectedModName(),
+      .is_install_date_set = 1,
+      .install_date = date,
+    };
 
+    std::unique_lock<decltype(mfl_for_db->lock)> mfl_lock(&mfl_for_db->lock);
+
+    /* next,process two cycle for traverse file list */
+
+    dtr.is_file_path_set = 1;
+    /* step1 : import directory list */
+    for (auto e : mfl_for_db->directory_list) {
+      dtr.file_path = e;
+
+      db.registerDBOperation(mhwimm_db_ns::SQL_OP::SQL_ADD, dtr);
+      db.executeDBOperation();
+      
+      if (db.getCurrentStatus() == mhwimm_db_ns::DB_STATUS::DB_ERROR)
+        goto err_exit_with_undo;
+    }
+
+    /* step2 : import regular file list */
+    for (auto e : mfl_for_db->regular_file_list) {
+      dtr.file_path = e;
+
+      db.registerDBOperation(mhwimm_db_ns::SQL_OP::SQL_ADD, dtr);
+      db.executeDBOperation();
+
+      if (db.getCurrentStatus() == mhwimm_db_ns::DB_STATUS::DB_ERROR)
+        goto err_exit_with_undo;
+    }
+    return;
+
+  err_exit_with_undo:
+    /* we encountered error when import record into db */
+    std::string err_msg;
+    db.getErrMsg(err_msg);
+    std::cerr << err_msg << std::endl;
+
+    /* delete all records of current mod from db */
+    dtr.is_file_path_set = 0;
+    dtr.is_install_date_set = 0;
+    db.registerDBOperation(mhwimm_db_ns::SQL_OP::SQL_DEL, dtr);
+    db.executeDBOperation();
+
+    if (db.getCurrentStatus() == mhwimm_db_ns::DB_STATUS::DB_ERROR) {
+      db.getErrMsg(err_msg);
+      std::cerr << err_msg << std::endl;
+    }
+
+    /* tell Thread Worker we encountered error */
+    db.chgDBStatus(mhwimm_db_ns::DB_STATUS::DB_ERROR);
   };
 
-  auto do_DB_del = [&, interest_field, mfl_for_db](void) -> void {
+  /* DEL - no result return */
+  auto do_DB_del = [&](void) -> void {
+    /* actually,we just invoke method executeDBOperation() as well */
+    /* because the regDBop helper been registered OP and DTR filter */
 
-
+    db.executeDBOperation();
+    if (db.getCurrentStatus() == mhwimm_db_ns::DB_STATUS::DB_ERROR) {
+      std::string err_msg;
+      db.getErrMsg(err_msg);
+      std::cerr << err_msg << std::endl;
+    }
   };
 
 

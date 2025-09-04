@@ -89,6 +89,11 @@ namespace mhwimm_db_ns {
       return db_path_ + "/" + db_name_;
     }
 
+    auto currentSelectedModName(void) const noexcept
+    {
+      return record_buf_.mod_name;
+    }
+
     int getFieldValue(db_tr_idx i, std::string &buf)
     {
       if (!more_row_indicator_) {
