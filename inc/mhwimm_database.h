@@ -57,6 +57,8 @@ namespace mhwimm_db_ns {
     INTEREST_DATE
   };
 
+  using interest_db_field_t = uint8_t;
+
   class mhwimm_db finally {
   public:
     mhwimm_db(const char *db_name, const char *db_path) =default
@@ -80,13 +82,20 @@ namespace mhwimm_db_ns {
     int closeDB(void);
     int tryCreateTable(void);
 
-    bool is_db_opened(void) const { return !(db_handler_ == nullptr); }
+    bool is_db_opened(void) const noexcept { return db_handler_ != nullptr; }
+
+    std::string returnDBpath(void) const noexcept
+    {
+      return db_path_ + "/" + db_name_;
+    }
 
     int getFieldValue(db_tr_idx i, std::string &buf)
     {
-      if (!more_row_indicator_)
+      if (!more_row_indicator_) {
+        current_status_ = DB_STATUS::DB_ERROR;
+        local_err_msg_ = "db: error: no result returned.";
         return -1;
-      current_status_ = DB_STATUS::DB_WORKING;
+      }
       switch (i) {
       case db_tr_idx::IDX_MOD_NAME:
         buf = record_buf_.mod_name;
@@ -101,7 +110,6 @@ namespace mhwimm_db_ns {
         local_err_msg_ = "db: error: undefined filed index."
         return -1;
       }
-      current_status_ = DB_STATUS::DB_IDLE;
       return 0;
     }
 
@@ -113,18 +121,22 @@ namespace mhwimm_db_ns {
       current_status_ = DB_STATUS::DB_IDLE;
     }
 
+    void chgDBStatus(DB_STATUS s) noexcept
+    {
+      current_status_ = s;
+    }
     int executeDBOperation(void);
     auto getCurrentOP(void) { return current_op_; }
 
     auto getDBStatus(void) { return current_status_; }
-    void resetDBStatus(void)
+    void resetDB(void)
     {
       current_status_ = DB_STATUS::DB_IDLE;
       current_op_ = SQL_OP::NOP;
       record_buf_ = {0};
     }
 
-    void getDBErrMsg(std::string &outside_buf)
+    void getDBErrMsg(std::string &outside_buf) const noexcept
     {
       current_status_ = DB_STATUS::DB_WORKING;
       if (current_status_ == DB_STATUS::DB_ERROR)

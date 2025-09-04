@@ -3,7 +3,7 @@
 
 mhwimm_db_ns::mhwimm_db *db_impl(nullptr);
 extern mhwimm_sync_mechanism_ns::mod_files_list *mfl_for_db;
-extern uint8_t mhwimm_db_ns::interest_field;
+extern mhwimm_db_ns::interest_db_field_t interest_field;
 
 void init_regDB_routines(mhwimm_db_ns::mhwimm_db *db)
 {
@@ -26,10 +26,7 @@ void regDBop_getInstalled_Modinfo(const std::string &modname,
 {
   asset(impl != nullptr);
   mfl_for_db = mfl;
-  interest_field = 
-    mhwimm_db_ns::INTEREST_FIELD::INTEREST_NAME +
-    mhwimm_db_ns::INTEREST_FIELD::INTEREST_PATH +
-    mhwimm_db_ns::INTEREST_FIELD::INTEREST_DATE;
+  interest_field = mhwimm_db_ns::INTEREST_FIELD::INTEREST_PATH;
   mhwimm_db_ns::db_table_record dtr = {
     .is_mod_name_set = 1,
     .mod_name = modname, // as filter
