@@ -1,6 +1,8 @@
 #include "mhwimm_sync_mechanism.h"
 #include "mhwimm_database.h"
 
+#include <assert.h>
+
 mhwimm_db_ns::mhwimm_db *db_impl(nullptr);
 extern mhwimm_sync_mechanism_ns::mod_files_list *mfl_for_db;
 extern mhwimm_db_ns::interest_db_field_t interest_field;

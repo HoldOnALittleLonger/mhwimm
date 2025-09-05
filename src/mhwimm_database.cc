@@ -1,5 +1,7 @@
 #include "mhwimmc_database.h"
 
+#include <cstdint>
+
 namespace mhwimmc_db_ns {
 
 

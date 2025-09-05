@@ -3,31 +3,7 @@
 
 #include <cstddef>
 
-/**
- * regDBop_getAllInstalled_Modsname - register DB operation to get all installed mods'name in
- *                                    @mfl
- */
-extern void regDBop_getAllInstalled_Modsname(mhwimm_sync_mechanism_ns::mod_files_list *mfl);
-
-/**
- * regDBop_getInstalled_Modinfo - register DB operation to get mod info of an especified mod
- *                                in @mfl
- */
-extern void regDBop_getInstalled_Modinfo(const std::string &modname,
-                                         mhwimm_sync_mechanism_ns::mod_files_list *mfl);
-
-/**
- * regDBop_add_mod_info - register DB operation to add new records from @mfl
- *                        for an especified mod
- */
-extern void regDBop_add_mod_info(const std::string &modname,
-                                 mhwimm_sync_mechanism_ns::mod_files_list *mfl);
-
-/**
- * regDBop_remove_mod_info - register DB operation to remove records for an especified
- *                           mod @modname
- */
-extern void regDBop_remove_mod_info(const std::string &modname);
+#include <assert.h>
 
 /**
  * mhwimm_executor_thread_worker - thread worker for Executor
@@ -121,6 +97,9 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
       exedb_lock.unlock();
       exedb_lock.lock();
       if (!is_db_op_succeed) {
+        /* if we failed to add new records to BD,we must undo INSTALL. */
+        exe.setCMD(mhwimm_executor_ns::mhwimm_executor_cmd::UNINSTALL);
+        exe.executeCurrentCMD();
         ctrlmsg.io_buf = std::string{"error: Failed to add records to DB."};
         ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
         continue;

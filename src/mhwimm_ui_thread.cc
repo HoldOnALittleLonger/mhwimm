@@ -1,7 +1,7 @@
 #include "mhwimm_ui_thread.h"
 #include "mhwimm_sync_mechanism.h"
 
-#include <cassert>
+#include <assert.h>
 
 using mhwimm_sync_mechanism_ns::uiexemsgexchg, mhwimm_sync_mechanism_ns::program_exit;
 
@@ -41,8 +41,13 @@ void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlm
     mmui.printPrompt();
 
     ssize_t ret(mmui.readFromUser());
-    if (ret < 0) {
-      mmui.printMessage(std::string{"Failed to read user input!"});
+    if (ret <= 0) {
+      /**
+       * = 0 -> EOF or ENTER
+       * = -1 -> error encountered,or interrupted by signal
+       */
+      if (ret < 0) // print msg when detected error
+        mmui.printMessage(std::string{"Failed to read user input!"});
       continue;
     }
 

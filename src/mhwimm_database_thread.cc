@@ -6,8 +6,6 @@
 #include <iostream>
 #include <cstdbool>
 
-#include <assert.h>
-
 /* ins_date -  used  by ADD operation for field "install_date" */
 static std::time_t ins_date(0);
 
@@ -127,7 +125,7 @@ void mhwimmc_db_thread_worker(mhwimmc_db_ns::mhwimmc_db &db)
 
   /* ADD - no result return */
   auto do_DB_add = [&, mfl_for_db](void) -> void {
-    ins_date = time(NULL);
+    ins_date = std::system_clock::to_time_t(std::system_clock::now());
     std::string date(ctime(&ins_date));
     std::string date = date.substr(0, date.length() - 1);
     

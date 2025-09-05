@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdbool>
+#include <cstdlib>
 
 #include <fstream>
 #include <string>
@@ -106,7 +107,7 @@ namespace mhwimm_config_ns {
         
       auto pos_equal_char = config_line.find("=");
       if (pos_equal_char == std::string::npos)  // illegal config string
-        continue;
+        continue;                               // ignore it
 
       std::string config_name = config_line.substr(0, pos_equal_char - config_line.begin());
       std::string config_value = config_line.substr(pos_equal_char - config_line.begin() + 1,
@@ -123,6 +124,7 @@ namespace mhwimm_config_ns {
     conf_source.close();
     return ret;
   }
+
 }
 
 #endif

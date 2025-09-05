@@ -11,6 +11,8 @@
 #include <string>
 #include <list>
 
+#include <assert.h>
+
 namespace mhwimm_executor_ns {
 
   /**
@@ -93,6 +95,10 @@ namespace mhwimm_executor_ns {
     }
 
     auto currentCMD(void) noexcept { return current_cmd_; }
+    void setCMD(mhwimm_executor_cmd cmd) const noexcept
+    {
+      current_cmd_ = cmd;
+    }
 
     void resetStatus(void) noexcept
     {

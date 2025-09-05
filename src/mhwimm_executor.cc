@@ -2,13 +2,13 @@
 
 #include <cstring>
 #include <cstdbool>
+#include <cstdint>
 #include <exception>
 
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#include <errno.h>
 
 namespace mhwimm_executor_ns {
 
@@ -59,32 +59,32 @@ namespace mhwimm_executor_ns {
 
     switch (calculate_key(arg)) {
     case EXIT_CMD_KEY:
-      current_cmd_ = mhwimm_executor_cmd::EXIT;
+      setCMD(mhwimm_executor_cmd::EXIT);
       break;
     case LS_CMD_KEY:
-      current_cmd_ = mhwimm_executor_cmd::LS;
+      setCMD(mhwimm_executor_cmd::LS);
       break;
     case INSTALLED_CMD_KEY:
-      current_cmd_ = mhwimm_executor_cmd::INSTALLED;
+      setCMD(mhwimm_executor_cmd::INSTALLED);
       break;
     case CD_CMD_KEY:
-      current_cmd_ = mhwimm_executor_cmd::CD;
+      setCMD(mhwimm_executor_cmd::CD);
       parse_more = true;
       break;
     case INSTALL_CMD_KEY:
-      cuurrent_cmd_ = mhwimm_executor_cmd::INSTALL;
+      setCMD(mhwimm_executor_cmd::INSTALL);
       parse_more = true;
       break;
     case UNINSTALL_CMD_KEY:
-      current_cmd_ = mhwimm_executor_cmd::UNINSTALL;
+      setCMD(mhwimm_executor_cmd::UNINSTALL);
       parse_more = true;
       break;
     case CONFIG_CMD_KEY:
-      current_cmd_ = mhwimm_executor_cmd::CONFIG;
+      setCMD(mhwimm_executor_cmd::CONFIG);
       parse_more = true;
       break;
     default:
-      current_cmd_ = mhwimm_executor_cmd::NOP;
+      setCMD(mhwimm_executor_cmd::NOP);
     }
 
     if (parse_more) {
