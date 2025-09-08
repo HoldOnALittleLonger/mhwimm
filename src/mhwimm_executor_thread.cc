@@ -1,5 +1,5 @@
-#include "mhwimmc_cmd_thread.h"
-#include "mhwimmc_sync_types.h"
+#include "mhwimmc_executor_thread.h"
+#include "mhwimmc_sync_mechanism.h"
 
 #include <cstddef>
 

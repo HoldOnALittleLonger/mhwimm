@@ -41,8 +41,10 @@ namespace mhwimm_config_ns {
     skey_t mhwimmroot;
   };
 
+  struct the_default_traits : general_config_type<std::string, int> { };
+
   using the_default_config_type =
-    config_struct<general_config_types<std::string, int>>;
+    config_struct<the_default_traits>;
 
   /**
    * !! the main function have to takes care about config file and config structure.
@@ -119,7 +121,7 @@ namespace mhwimm_config_ns {
       else if (config_name = "MHWIROOT")
         conf->mhwiroot = config_value;
       else if (config_name = "MHWIMMCROOT")
-        conf->mhwimmcroot = config_value;
+        conf->mhwimmroot = config_value;
     }
     conf_source.close();
     return ret;

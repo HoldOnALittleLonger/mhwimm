@@ -3,7 +3,7 @@
 
 #include <assert.h>
 
-mhwimm_db_ns::mhwimm_db *db_impl(nullptr);
+static mhwimm_db_ns::mhwimm_db *db_impl(nullptr);
 extern mhwimm_sync_mechanism_ns::mod_files_list *mfl_for_db;
 extern mhwimm_db_ns::interest_db_field_t interest_field;
 

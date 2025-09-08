@@ -21,10 +21,10 @@ mhwimm_sync_mechanism_ns::mod_files_list *mfl_for_db(nullptr);
 // caller must ensures @db been opened
 // we do not check it at there
 /**
- * mhwimmc_db_thread_worker - DB module control thread
- * @db:                       db handler passed by caller
+ * mhwimm_db_thread_worker - DB module control thread
+ * @db:                      db handler passed by caller
  */
-void mhwimmc_db_thread_worker(mhwimmc_db_ns::mhwimmc_db &db)
+void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
 {
   {
     auto db_file_path(db.returnDBpath());

@@ -14,12 +14,10 @@ namespace mhwimm_ui_ns {
     if (cin.fail())
       return -1;
 
-    std::size_t readed(strlen(tmp_cbuf));
+    std::size_t readed(std::cin.gcount());
     if (!readed)
       return 0;
 
-    // delete '\n'    
-    tmp_cbuf[--readed] = '\0';
     local_msg_buffer_ = tmp_cbuf;
     return readed;
   }

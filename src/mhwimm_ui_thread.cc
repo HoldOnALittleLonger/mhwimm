@@ -9,8 +9,8 @@ using mhwimm_sync_mechanism_ns::uiexemsgexchg, mhwimm_sync_mechanism_ns::program
 /**
  * mhwimm_ui_thread_worker - UI module control thread
  * @mmui:                    UI module core object handler
- * @ucme:                     message exchange structure between UI module and
- *                            CMD module
+ * @ctrlmsg:                 message exchange structure between UI module and
+ *                           CMD module
  */
 void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlmsg)
 {
