@@ -34,6 +34,17 @@ namespace mhwimm_executor_ns {
 
   int mhwimm_executor::parseCMD(const std::string &cmd_string)
   {
+
+#define CD_CMD_KEY 287
+#define LS_CMD_KEY 317
+#define INSTALL_CMD_KEY 1083
+#define UNINSTALL_CMD_KEY 1404
+#define INSTALLED_CMD_KEY 1372
+#define CONFIG_CMD_KEY 903
+#define EXIT_CMD_KEY 633
+#define COMMANDS_CMD_KEY 1214
+#define HELP_CMD_KEY 609
+
     current_status_ = mhwimm_executor_status::WORKING;
 
     // clear all elements in the vector.
@@ -44,7 +55,7 @@ namespace mhwimm_executor_ns {
 
     try {
       cmd_tmp_buf = new char[buf_length];
-    } catch (std::bad_alloc &err) {
+    } catch (std::bad_alloc &) {
       generic_err_msg_output(ERROR_MSG_MEM);
       current_status_ = mhwimm_executor_status::ERROR;
       return -1;
@@ -83,6 +94,10 @@ namespace mhwimm_executor_ns {
       setCMD(mhwimm_executor_cmd::CONFIG);
       parse_more = true;
       break;
+    case COMMANDS_CMD_KEY:
+    case HELP_CMD_KEY:
+      setCMD(mhwimm_executor_cmd::COMMANDS);
+      break;
     default:
       setCMD(mhwimm_executor_cmd::NOP);
     }
@@ -93,6 +108,16 @@ namespace mhwimm_executor_ns {
         parameters_[nparams_++] = arg;
       }
     }
+
+#undef CD_CMD_KEY
+#undef LS_CMD_KEY
+#undef INSTALL_CMD_KEY
+#undef UNINSTALL_CMD_KEY
+#undef INSTALLED_CMD_KEY
+#undef CONFIG_CMD_KEY
+#undef EXIT_CMD_KEY
+#undef COMMANDS_CMD_KEY
+#undef HELP_CMD_KEY
 
     current_status_ = mhwimm_executor_status::IDLE;
     delete[] cmd_tmp_buf;
@@ -136,6 +161,11 @@ namespace mhwimm_executor_ns {
     case mhwimm_executor_cmd::EXIT:
       if (cmd_exit_syntaxChecking())
         return exit();
+      goto err_syntax;
+    case mhwimm_executor_cmd::COMMANDS:
+    case mhwimm_executor_cmd::HELP:
+      if (cmd_commands_syntaxChecking())
+        return commands();
       goto err_syntax;
     default:
       current_status_ = mhwimm_executor_status::ERROR;
@@ -202,6 +232,7 @@ namespace mhwimm_executor_ns {
     // we does not use concurrent protecting at there,
     // because of that the other control path will change this
     // indicator is the signal handler
+    current_status_ = mhwimm_executor_status::WORKING;
     program_exit = true;
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
@@ -220,13 +251,13 @@ namespace mhwimm_executor_ns {
 
     switch (calculate_key(key.c_str())) {
     case CONFIG_USERHOME:
-      conf_->userhome = static_cast<typename mhwimm_config_ns::the_default_config_type::skey_t>(value);
+      conf_->userhome = static_cast<typename mhwimm_config_ns::get_config_traits<config_t>::skey_t>(value);
       break;
     case CONFIG_MHWIROOT:
-      conf_->mwhiroot = static_cast<typename mhwimm_config_ns::the_default_config_type::skey_t>(value);
+      conf_->mwhiroot = static_cast<typename mhwimm_config_ns::get_config_traits<config_t>::skey_t>(value);
       break;
     case CONFIG_MHWIMMCROOT:
-      conf_->mwhimmcroot = static_cast<typename mhwimm_config_ns::the_default_config_type::skey_t>(value);
+      conf_->mwhimmcroot = static_cast<typename mhwimm_config_ns::get_config_traits<config_t>::skey_t>(value);
       break;
     default:
       generic_err_msg_output(ERROR_MSG_UNKNOWNCONF);
@@ -244,8 +275,10 @@ namespace mhwimm_executor_ns {
 
   int mhwimm_executor::install(void)
   {
+    current_status_ = mhwimm_executor_status::WORKING;
     // install [ mod name ] [ mod directory ]
     if (nparams_ != 2) {
+      current_status_ = mhwimm_executor_status::ERROR;
       generic_err_msg_output(ERROR_MSG_ERRFORM);
       goto err_exit;
     }
@@ -349,13 +382,13 @@ namespace mhwimm_executor_ns {
     // but Executor does not ask DB to returns records of
     // mod files.
     // this work will hand over to worker thread.
+    current_status_ = mhwimm_executor_status::WORKING;
 
     if (nparams_ != 1) {
       generic_err_msg_output(ERROR_MSG_INCFORM);
       current_status_ = mhwimm_executor_status::ERROR;
       return -1;
     }
-    current_status_ = mhwimm_executor_status::WORKING;
 
     // acquire list lock
     std::unique_lock<decltype(mfiles_list_->lock)> mfl_lock(&mfiles_list_->lock);
@@ -399,7 +432,7 @@ namespace mhwimm_executor_ns {
     std::unique_lock<decltype(mfiles_list_->lock)> mfl_lock(&mfiles_list_->lock);
     noutput_msgs_ = mfiles_list_->mod_name_list.size();
     if (!noutput_msgs_) {
-      cmd_output_msgs_[noutput_infos++] = "No mods been installed.";
+      cmd_output_msgs_[noutput_msgs_++] = "No mods been installed.";
     } else {
       uint8_t idx(0);
       for (auto e : mfiles_list_->mod_name_list) {
@@ -408,6 +441,36 @@ namespace mhwimm_executor_ns {
     }
 
     is_cmd_has_output_ = true;
+    current_status_ = mhwimm_executor_status::IDLE;
+    return 0;
+  }
+
+  int commands(void)
+  {
+    constexpr char *cd_description = "cd <path> - change current work directory";
+    constexpr char *ls_description = "ls - list files under current work direcotry";
+    constexpr char *install_description = "install <mod name> <mod directory> - install mod @mode_name,its files are existed in @mod_direcotry";
+    constexpr char *unintall_description = "unintall <mod name> - unintall mod @mod_name";
+    constexpr char *config_description = "config <key>=<value> - set config,implemented @userhome @mhwiroot, @mhwimmroot";
+    constexpr char *exit_description = "exit - exit application";
+    constexpr char *commands_description = "commands - list commands and print description";
+    constexpr char *help_description = "help - help message,implemented as cmd commands";
+
+    constexpr uint8_t ndescriptions = 8;
+
+    constexpr char *descriptions[ndescriptions] = {
+      cd_description, ls_description, install_description, unintall_description,
+      config_description, exit_description, commands_description, help_description
+    };
+
+    current_status_ = mhwimm_executor_status::WORKING;
+
+    for (uint8_t i(0); i < ndescriptions; ++i) {
+      cmd_output_msgs_[i] = descriptions[i];
+    }
+
+    is_cmd_has_output = true;
+    noutput_msgs_ = ndescriptions;
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
   }

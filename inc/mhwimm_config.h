@@ -10,41 +10,41 @@
 
 namespace mhwimm_config_ns {
 
-  template<typename _StrKeyTp, typename _NumKeyTp>
-  struct general_config_types {
-    typedef _StrKeyTp str_key;
-    typedef _NumKeyTp num_key;
-  };
-
-  template<typename _Tp>
+  template<typename _MType>
   struct config_struct_traits {
-    typedef _Tp::str_key skey_t;
-    typedef _Tp::num_key nkey_t;
+    typedef typename _MType::config_string_key_type skey_t;
+    typedef typename _MType::config_number_key_type nkey_t;
   };
 
-  template<typename _Tp *>
+  template<typename const _MType *>
   struct config_struct_traits {
-    typedef _Tp::str_key * skey_t;
-    typedef _Tp::num_key * nkey_t;
+    typedef const _MType::config_string_key_type * skey_t;
+    typedef const _MType::config_number_key_type * nkey_t;
   };
 
-  template<typename const _Tp *>
+  template<typename _MType *>
   struct config_struct_traits {
-    typedef const _Tp::str_key * skey_t;
-    typedef const _Tp::num_key * nkey_t;
+    typedef _MType::config_string_key_type * skey_t;
+    typedef _MType::config_number_key_type * nkey_t;
   };
 
-  template<typename _Tp>
-  struct config_struct : config_struct_traits<_Tp> {
+  struct config_member_type {
+    typedef std::string config_string_key_type;
+    typedef int config_number_key_type;
+  };
+
+  template<typename _MType>
+  struct config_struct : public config_struct_traits<_MType> {
+    typedef _MType type_tag;
     skey_t userhome;
     skey_t mhwiroot;
     skey_t mhwimmroot;
   };
 
-  struct the_default_traits : general_config_type<std::string, int> { };
+  template<typename _ConfigType>
+  struct get_config_traits : public config_struct_traits<_ConfigType::type_tag> {};
 
-  using the_default_config_type =
-    config_struct<the_default_traits>;
+  using config_t = config_struct<config_member_type>;
 
   /**
    * !! the main function have to takes care about config file and config structure.
@@ -58,8 +58,8 @@ namespace mhwimm_config_ns {
    * return:              TRUE => succeed
    *                      FLASE => failed
    */
-  template<typename _CTraits>
-  bool makeup_config_file(const config_struct<_CTraits> *conf, const char *config_file_path)
+  template<typename _ConfigType>
+  bool makeup_config_file(const _ConfigType *conf, const char *config_file_path)
   {
     std::ofstream conf_sink;
     // we just discard everything in the original file
@@ -89,8 +89,8 @@ namespace mhwimm_config_ns {
    *                    FALSE => failed
    * # we just drop any illegal config string silently
    */
-  template<typename _CTraits>
-  bool read_from_config(config_struct<_CTraits> *conf, const char *config_file_path)
+  template<typename _ConfigType>
+  bool read_from_config(_ConfigType *conf, const char *config_file_path)
   {
     std::istream conf_source;
     conf_source.open(config_file_path, std::ios_base::in);
@@ -111,16 +111,19 @@ namespace mhwimm_config_ns {
       if (pos_equal_char == std::string::npos)  // illegal config string
         continue;                               // ignore it
 
-      std::string config_name = config_line.substr(0, pos_equal_char - config_line.begin());
-      std::string config_value = config_line.substr(pos_equal_char - config_line.begin() + 1,
-                                                    config_line.end() - pos_equal_char - 1);
+      typename get_config_traits<_ConfigType>::skey_t config_name;
+      typename get_config_traits<_ConfigType>::skey_t config_value;
+
+      config_name = config_line.substr(0, pos_equal_char - config_line.begin());
+      config_value = config_line.substr(pos_equal_char - config_line.begin() + 1,
+                                        config_line.end() - pos_equal_char - 1);
 
       // match config options
-      if (config_name = "USERHOME")
+      if (config_name == "USERHOME")
         conf->userhome = config_value;
-      else if (config_name = "MHWIROOT")
+      else if (config_name == "MHWIROOT")
         conf->mhwiroot = config_value;
-      else if (config_name = "MHWIMMCROOT")
+      else if (config_name == "MHWIMMCROOT")
         conf->mhwimmroot = config_value;
     }
     conf_source.close();

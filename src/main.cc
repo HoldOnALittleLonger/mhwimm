@@ -42,13 +42,13 @@ static bool getenv_HOME(char *buf, std::size_t len);
 
 static bool mhwimm_need_initialization(const std::string &config_path)
 
-static bool ask_user_to_setup_mhwimmroot(mhwimm_config_ns::the_default_config_type &conf);
+static bool ask_user_to_setup_mhwimmroot(mhwimm_config_ns::config_t &conf);
 
 int main(void)
 {
   std::cout << "Initializing..." << std::endl;
 
-  mhwimm_config_ns::the_default_config_type conf = {
+  mhwimm_config_ns::config_t conf = {
     .userhome = "nil",
     .mhwiroot = "nil",
     .mhwimmroot = "nil",
@@ -103,14 +103,13 @@ int main(void)
     }
 
     /* create config file */
-    if (!mhwimm_config_ns::makeup_config_file<
-        mhwimm_config_ns::the_default_traits>(&conf, config_file_path.c_str())) {
+    if (!mhwimm_config_ns::makeup_config_file<config_t>(&conf,
+                                                        config_file_path.c_str())) {
       std::cerr << "Failed to makeup config file." << std::endl;
       return -1;
     }
   }
-  else if (!read_from_config<
-           mhwimm_config_ns::the_default_traits>(&conf, config_file_path.c_str())) {
+  else if (!read_from_config<config_t>(&conf, config_file_path.c_str())) {
     std::cerr << "Failed to read from config file." << std::endl;
     return -1;
   }
@@ -174,6 +173,8 @@ int main(void)
   exe_thread.join();
   ui_thread.join();
 
+  mhwimm_config_ns::makeup_config_file<config_t>(&conf, config_file_path.c_str());
+
   return 0;
 }
 
@@ -204,7 +205,7 @@ static inline bool mhwimm_need_initialization(const std::string &config_path)
   return need;
 }
 
-static bool ask_user_to_setup_mhwimmroot(mhwimm_config_ns::the_default_config_type &conf)
+static bool ask_user_to_setup_mhwimmroot(mhwimm_config_ns::config_t &conf)
 {
   std::size_t path_max = pathconf("/", _PC_PATH_MAX);
   std::unique_ptr<char> buf(new char[path_max]);

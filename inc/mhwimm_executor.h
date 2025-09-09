@@ -33,6 +33,8 @@ namespace mhwimm_executor_ns {
     INSTALLED,
     CONFIG,
     EXIT,
+    COMMANDS,
+    HELP = COMMANDS,
     NOP
   };
 
@@ -45,7 +47,7 @@ namespace mhwimm_executor_ns {
   class mhwimm_executor finally {
   public:
 
-    explicit mhwimm_executor(mhwimmc_config_ns::the_default_config_type *conf) =default
+    explicit mhwimm_executor(mhwimmc_config_ns::config_t *conf) =default
       : conf_(conf), mfiles_list_(nullptr)
       {
         current_cmd_ = NOP;
@@ -117,6 +119,7 @@ namespace mhwimm_executor_ns {
     int installed(void) noexcept;
     int config(void) noexcept;
     int exit(void) noexcept;
+    int commands(void) noexcept;
 
     bool syntaxChecking(std::size_t req_nparams)
     {
@@ -161,6 +164,8 @@ namespace mhwimm_executor_ns {
       return true;
     }
     bool cmd_exit_syntaxChecking(void) { return true; }
+    bool cmd_commands_syntaxChecking(void) { return true; }
+    bool cmd_help_syntaxChecking(void) { return cmd_commands_syntaxChecking(); }
 
     void generic_err_msg_output(const std::string &err_msg) noexcept
     {
@@ -173,7 +178,7 @@ namespace mhwimm_executor_ns {
     // the first is : pointer to config structure
     // the second is : pointer to mod file list structure
 
-    mhwimm_config_ns::the_default_config_type *conf_;
+    mhwimm_config_ns::config_t *conf_;
     struct mod_files_list *mfiles_list_;
 
     mhwimm_executor_cmd current_cmd_;
