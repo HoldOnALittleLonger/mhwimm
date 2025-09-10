@@ -1,8 +1,6 @@
 #include "mhwimm_ui_thread.h"
 #include "mhwimm_sync_mechanism.h"
 
-#include <assert.h>
-
 using namespace mhwimm_sync_mechanism_ns;
 
 /**
@@ -65,18 +63,16 @@ void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlm
     for (; ;) {
       uiexe_mutex_lock.lock();
 
-      // we disallow current status of @ctrlmsg is UI_CMD,
-      // if in the case,that means Executor encountered fatal error.
-      assert(ctrlmsg.status != UIEXE_STATUS::UI_CMD);
-
-      if (ctrlmsg.status == UIEXE_STATUS::EXE_NOMSG) // no output info
+      if (ctrlmsg.status == UIEXE_STATUS::EXE_ONEMSG) {
+        mmui.newLine();
+        mmui.printIndentSpaces();
+        mmui.printMessage(ctrlmsg.io_buf);
         break;
-
-      mmui.newLine();
-      mmui.printIndentSpaces();
-      mmui.printMessage(ctrlmsg.io_buf);
-
-      if (ctrlmsg.status == UIEXE_STATUS::EXE_ONEMSG) // one line output
+      } else if (ctrlmsg.status == UIEXE_STATUS::EXE_MOREMSG) {
+        mmui.newLine();
+        mmui.printIndentSpaces();
+        mmui.printMessage(ctrlmsg.io_buf);
+      } else
         break;
 
       uiexe_mutex_lock.unlock(); // if more than one line info have to be printed,

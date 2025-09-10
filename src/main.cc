@@ -142,11 +142,6 @@ int main(void)
   sigaddset(&siga.sa_mask, SIGINT);
   sigaddset(&siga.sa_mask, SIGTERM);
 
-  if (sigprocmask(SIG_BLOCK, &siga.sa_mask, NULL) < 0) {
-    std::cerr << "Failed to setup thread signal mask." <<std::endl;
-    return false;
-  }
-
   /* prepare threads */
   mhwimm_ui_ns::mhwimm_ui ui;
   mhwimm_executor_ns::mhwimm_executor exe(&conf);
@@ -160,7 +155,16 @@ int main(void)
 
   int sig = 0;
 
+  if (pthread_sigmask(SIG_BLOCK, &siga.sa_mask, NULL) < 0) {
+    std::cerr << "Failed to setup thread signal mask." <<std::endl;
+    program_exit = 1;
+  }
+
  repeat_sigwait:
+
+  if (program_exit) {
+    goto exit_wait_threads;
+  }
 
   if (sigwait(&siga.sa_mask, &sig) < 0) {
     program_exit = 1;
@@ -172,10 +176,14 @@ int main(void)
       goto repeat_sigwait;
   }
 
+ exit_wait_threads:
+  kill(getpid(), SIGINT);
+
   db_thread.join();
   exe_thread.join();
   ui_thread.join();
 
+  std::cerr << "Ready to makeup config file." << std::endl;
   mhwimm_config_ns::makeup_config_file<mhwimm_config_ns::config_t>(&conf, config_file_path.c_str());
 
   return 0;

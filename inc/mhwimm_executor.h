@@ -91,7 +91,11 @@ namespace mhwimm_executor_ns {
       return parameters_[0];
     }
 
-    void clearGetOutputHistory(void) { output_info_index_ = 0; }
+    void clearGetOutputHistory(void)
+    {
+      output_info_index_ = 0;
+      is_cmd_has_output_ = false;
+    }
 
     auto currentStatus(void) noexcept
     {
@@ -157,9 +161,9 @@ namespace mhwimm_executor_ns {
         return false;
 
       // third,splite "key=value" pair to two parameters
-      std::string key(parameters_[0].substr(0, equal_pos - parameters_[0].begin() - 1));
+      std::string key(parameters_[0].substr(0, equal_pos - parameters_[0].begin()));
       std::string val(parameters_[0].substr(equal_pos - parameters_[0].begin() + 1,
-                                            parameters_[0].end() - equal_pos));
+                                            parameters_[0].end() - equal_pos - 1));
 
       parameters_[0] = key;
       parameters_[1] = val;
@@ -185,6 +189,13 @@ namespace mhwimm_executor_ns {
 
     mhwimm_executor_cmd current_cmd_;
     mhwimm_executor_status current_status_;
+
+    template<typename _VecType>
+    void rs_vec_if_necessary(_VecType &vec, unsigned int nstored)
+    {
+      if (nstored == vec.capacity())
+        vec.resize(2 * vec.capacity());
+    }
 
     std::size_t nparams_;
     std::vector<std::string> parameters_;

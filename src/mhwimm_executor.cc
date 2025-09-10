@@ -6,6 +6,8 @@
 #include <exception>
 #include <functional>
 
+#include <iostream>
+
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -106,7 +108,7 @@ namespace mhwimm_executor_ns {
 
     if (parse_more) {
       nparams_ = 0; // reset number of parameters
-      while ((arg = strtok(cmd_tmp_buf, " "))) {
+      while ((arg = strtok(NULL, " "))) {
         parameters_[nparams_++] = arg;
       }
     }
@@ -131,6 +133,10 @@ namespace mhwimm_executor_ns {
     if (current_status_ == mhwimm_executor_status::ERROR ||
         current_status_ == mhwimm_executor_status::WORKING)
       return -1;
+
+    std::cerr << "noutput_msgs_ = " << noutput_msgs_ << std::endl;
+    std::cerr << "nparams_ = " << nparams_ << std::endl;
+    std::cerr << "size of cmd_output_msgs_ " << cmd_output_msgs_.size() << std::endl;
 
     current_status_ = mhwimm_executor_status::WORKING;
     noutput_msgs_ = 0;
@@ -168,6 +174,9 @@ namespace mhwimm_executor_ns {
       if (cmd_commands_syntaxChecking())
         return commands();
       goto err_syntax;
+    case mhwimm_executor_cmd::NOP:
+      current_status_ = mhwimm_executor_status::IDLE;
+      return 0;
     default:
       current_status_ = mhwimm_executor_status::ERROR;
       generic_err_msg_output(ERROR_MSG_UNKNOWNCMD);
@@ -219,6 +228,7 @@ namespace mhwimm_executor_ns {
           continue;
       }
 
+      rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);
       cmd_output_msgs_[noutput_msgs_++] = std::string{dentry->d_name};
     }
     (void)closedir(this_dir);
@@ -446,6 +456,7 @@ namespace mhwimm_executor_ns {
     } else {
       uint8_t idx(0);
       for (auto e : mfiles_list_->mod_name_list) {
+        rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);
         cmd_output_msgs_[idx++] = e;
       }
     }

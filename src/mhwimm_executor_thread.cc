@@ -48,22 +48,21 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
     // there must be a fatal error was encountered.
     //    assert(ctrlmsg.status == UIEXE_STATUS::UI_CMD);
 
-    if (program_exit)
-      break;
-
     int ret = exe.parseCMD(ctrlmsg.io_buf);
     /* we failed to parse command input */
     if (ret || exe.currentStatus() == mhwimm_executor_status::ERROR) {
       (void)exe.getCMDOutput(ctrlmsg.io_buf);
       ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
       continue;
-    }
+    } else if (exe.currentCMD() == mhwimm_executor_cmd::NOP)
+      continue;
 
     // we must retrive mod info before execute these two cmds.
     switch (exe.currentCMD()) {
     case mhwimm_executor_cmd::INSTALLED:
       regDBop_getAllInstalled_Modsname(&mfiles_list);
       exedb_lock.unlock();
+      NOP_DELAY();
       exedb_lock.lock();
       if (!is_db_op_succeed) {
         ctrlmsg.io_buf = std::string{"error: Failed to retrive installed mods."};
@@ -76,6 +75,7 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
         const auto &mod_name(exe.modNameForUNINSTALL());
         regDBop_getInstalled_Modinfo(mod_name, &mfiles_list);
         exedb_lock.unlock();
+        NOP_DELAY();
         exedb_lock.lock();
         if (!is_db_op_succeed) {
           ctrlmsg.io_buf = std::string{"error: Failed to retrive mod info from DB."};
