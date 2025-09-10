@@ -1,8 +1,8 @@
 #ifndef _MHWIMM_UI_THREAD_H_
 #define _MHWIMM_UI_THREAD_H_
 
-class mhwimm_ui_ns::mhwimm_ui;
-struct mhwimm_sync_mechanism_ns::uiexemsgexchg;
+#include "mhwimm_ui.h"
+#include "mhwimm_sync_mechanism.h"
 
 /**
  * mhwimm_ui_thread_worker - C++ multithread worker for take charge of 

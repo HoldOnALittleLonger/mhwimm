@@ -1,6 +1,9 @@
-#include "mhwimmc_database_thread.h"
-#include "mhwimmc_database.h"
-#include "mhwimmc_sync_mechanism.h"
+#include "mhwimm_database_thread.h"
+#include "mhwimm_database.h"
+#include "mhwimm_sync_mechanism.h"
+
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include <chrono>
 #include <iostream>
@@ -24,7 +27,7 @@ mhwimm_sync_mechanism_ns::mod_files_list *mfl_for_db(nullptr);
  * mhwimm_db_thread_worker - DB module control thread
  * @db:                      db handler passed by caller
  */
-void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
+void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
 {
   {
     auto db_file_path(db.returnDBpath());
@@ -35,7 +38,7 @@ void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
 
     std::string err_msg;
     if (db.openDB() < 0) {
-      db.getErrMsg(err_msg);
+      db.getDBErrMsg(err_msg);
       std::cerr << err_msg << std::endl;
       std::abort(); /* fatal error */
     }
@@ -47,7 +50,7 @@ void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
       db.tryCreateTable();
       if (db.getDBStatus() == mhwimm_db_ns::DB_STATUS::DB_ERROR) {
         /* we failed to create table */
-        db.getErrMsg(err_msg);
+        db.getDBErrMsg(err_msg);
         std::cerr << err_msg << std::endl;
         std::abort(); /* fatal error */
       }
@@ -55,7 +58,7 @@ void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
   }
 
   auto do_DB_ask = [&, interest_field, mfl_for_db](void) -> void {
-    std::unique_lock<decltype(mfl_for_db->lock)> mfl_lock(&mfl_for_db->lock);
+    std::unique_lock<decltype(mfl_for_db->lock)> mfl_lock(mfl_for_db->lock);
     int ret(0);
 
     mhwimm_db_ns::db_tr_idx name_idx(mhwimm_db_ns::db_tr_idx::IDX_MOD_NAME);
@@ -84,7 +87,7 @@ void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
         ret = stat(file_path.c_str(), &the_stat);
         if (ret < 0) {
           std::string err_msg = std::string{"error: file - "} + file_path + " does not exist.";
-          std::cerr << err_name << std::endl;
+          std::cerr << err_msg << std::endl;
           db.chgDBStatus(mhwimm_db_ns::DB_STATUS::DB_ERROR);
           return;
         } else if (S_ISDIR(the_stat.st_mode)) {
@@ -95,7 +98,7 @@ void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
         goto repeat_get;
       }
       else {
-        std::string err_smg("error: this regDBop has not be implemented.");
+        std::string err_msg("error: this regDBop has not be implemented.");
         std::cerr << err_msg << std::endl;
         db.chgDBStatus(mhwimm_db_ns::DB_STATUS::DB_ERROR);
         return;
@@ -119,25 +122,25 @@ void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
 
   err_getField:
     std::string err_msg;
-    db.getErrMsg(err_msg);
+    db.getDBErrMsg(err_msg);
     std::cerr << err_msg << std::endl;
   };
 
   /* ADD - no result return */
   auto do_DB_add = [&, mfl_for_db](void) -> void {
-    ins_date = std::system_clock::to_time_t(std::system_clock::now());
+    ins_date = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::string date(ctime(&ins_date));
-    std::string date = date.substr(0, date.length() - 1);
+    std::string date_rec = date.substr(0, date.length() - 1);
     
     /* because regDBop been specified,we have retrieve it */
     mhwimm_db_ns::db_table_record dtr = {
       .is_mod_name_set = 1,
       .mod_name = db.currentSelectedModName(),
       .is_install_date_set = 1,
-      .install_date = date,
+      .install_date = date_rec,
     };
 
-    std::unique_lock<decltype(mfl_for_db->lock)> mfl_lock(&mfl_for_db->lock);
+    std::unique_lock<decltype(mfl_for_db->lock)> mfl_lock(mfl_for_db->lock);
 
     /* next,process two cycle for traverse file list */
 
@@ -168,7 +171,7 @@ void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
   err_exit_with_undo:
     /* we encountered error when import record into db */
     std::string err_msg;
-    db.getErrMsg(err_msg);
+    db.getDBErrMsg(err_msg);
     std::cerr << err_msg << std::endl;
 
     /* delete all records of current mod from db */
@@ -178,7 +181,7 @@ void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     db.executeDBOperation();
 
     if (db.getCurrentStatus() == mhwimm_db_ns::DB_STATUS::DB_ERROR) {
-      db.getErrMsg(err_msg);
+      db.getDBErrMsg(err_msg);
       std::cerr << err_msg << std::endl;
     }
 
@@ -194,7 +197,7 @@ void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     db.executeDBOperation();
     if (db.getCurrentStatus() == mhwimm_db_ns::DB_STATUS::DB_ERROR) {
       std::string err_msg;
-      db.getErrMsg(err_msg);
+      db.getDBErrMsg(err_msg);
       std::cerr << err_msg << std::endl;
     }
   };
@@ -206,7 +209,7 @@ void mhwimmc_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
 
     db.resetDB();
 
-    std::unique_lock<decltype(exedb_sync_mutex)> exedb_lock(&exedb_sync_mutex);
+    std::unique_lock<decltype(exedb_sync_mutex)> exedb_lock(exedb_sync_mutex);
 
     // DB operation will be registered by Executor via call to register helpers.
     

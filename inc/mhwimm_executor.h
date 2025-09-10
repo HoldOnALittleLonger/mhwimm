@@ -44,18 +44,20 @@ namespace mhwimm_executor_ns {
     ERROR
   };
 
-  class mhwimm_executor finally {
+  class mhwimm_executor final {
   public:
 
-    explicit mhwimm_executor(mhwimmc_config_ns::config_t *conf) =default
+    explicit mhwimm_executor(mhwimm_config_ns::config_t *conf)
       : conf_(conf), mfiles_list_(nullptr)
       {
-        current_cmd_ = NOP;
-        current_status_ = IDLE;
+        current_cmd_ = mhwimm_executor_cmd::NOP;
+        current_status_ = mhwimm_executor_status::IDLE;
         nparams_ = 0;
         noutput_msgs_ = 0;
         is_cmd_has_output_ = false;
         output_info_index_ = 0;
+        parameters_.resize(8);
+        cmd_output_msgs_.resize(8);
       }
 
     mhwimm_executor(const mhwimm_executor &) =delete;
@@ -89,7 +91,7 @@ namespace mhwimm_executor_ns {
       return parameters_[0];
     }
 
-    void clearGetOuputHistory(void) { output_info_index_ = 0; }
+    void clearGetOutputHistory(void) { output_info_index_ = 0; }
 
     auto currentStatus(void) noexcept
     {
@@ -97,7 +99,7 @@ namespace mhwimm_executor_ns {
     }
 
     auto currentCMD(void) noexcept { return current_cmd_; }
-    void setCMD(mhwimm_executor_cmd cmd) const noexcept
+    void setCMD(mhwimm_executor_cmd cmd) noexcept
     {
       current_cmd_ = cmd;
     }
@@ -107,7 +109,7 @@ namespace mhwimm_executor_ns {
       current_status_ = mhwimm_executor_status::IDLE;
     }
 
-    void setMFLImpl(struct mod_files_list *mfl) { mfiles_list_ = mfl; }
+    void setMFLImpl(mhwimm_sync_mechanism_ns::mod_files_list *mfl) { mfiles_list_ = mfl; }
 
   private:
 
@@ -179,7 +181,7 @@ namespace mhwimm_executor_ns {
     // the second is : pointer to mod file list structure
 
     mhwimm_config_ns::config_t *conf_;
-    struct mod_files_list *mfiles_list_;
+    mhwimm_sync_mechanism_ns::mod_files_list *mfiles_list_;
 
     mhwimm_executor_cmd current_cmd_;
     mhwimm_executor_status current_status_;
@@ -188,7 +190,7 @@ namespace mhwimm_executor_ns {
     std::vector<std::string> parameters_;
 
     std::size_t noutput_msgs_;
-    std::vectory<std::string> cmd_output_msgs_;
+    std::vector<std::string> cmd_output_msgs_;
     bool is_cmd_has_output_;
 
     std::size_t output_info_index_;

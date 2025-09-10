@@ -7,6 +7,7 @@
 #include <string>
 
 struct sqlite3;
+struct sqlite3_stmt;
 
 namespace mhwimm_db_ns {
 
@@ -59,9 +60,9 @@ namespace mhwimm_db_ns {
 
   using interest_db_field_t = uint8_t;
 
-  class mhwimm_db finally {
+  class mhwimm_db final {
   public:
-    mhwimm_db(const char *db_name, const char *db_path) =default
+    mhwimm_db(const char *db_name, const char *db_path)
       : db_name_(db_name), db_path_(db_path)
     {
       db_handler_ = nullptr;
@@ -70,7 +71,7 @@ namespace mhwimm_db_ns {
       current_status_ = DB_STATUS::DB_IDLE;
       record_buf_ = db_table_record{0};
       local_err_msg_ = "nil";
-      more_row_indicator_ = flase;
+      more_row_indicator_ = false;
     }
 
     mhwimm_db(const mhwimm_db &) =delete;
@@ -112,7 +113,7 @@ namespace mhwimm_db_ns {
         buf = record_buf_.install_date;
       default:
         current_status_ = DB_STATUS::DB_ERROR;
-        local_err_msg_ = "db: error: undefined filed index."
+        local_err_msg_ = "db: error: undefined filed index.";
         return -1;
       }
       return 0;
@@ -131,22 +132,20 @@ namespace mhwimm_db_ns {
       current_status_ = s;
     }
     int executeDBOperation(void);
-    auto getCurrentOP(void) { return current_op_; }
+    auto getCurrentOP(void) const { return current_op_; }
+    auto getCurrentStatus(void) const { return current_status_; }
 
-    auto getDBStatus(void) { return current_status_; }
+    auto getDBStatus(void) const { return current_status_; }
     void resetDB(void)
     {
       current_status_ = DB_STATUS::DB_IDLE;
-      current_op_ = SQL_OP::NOP;
+      current_op_ = SQL_OP::SQL_NOP;
       record_buf_ = {0};
     }
 
     void getDBErrMsg(std::string &outside_buf) const noexcept
     {
-      current_status_ = DB_STATUS::DB_WORKING;
-      if (current_status_ == DB_STATUS::DB_ERROR)
-        outside_buf = local_err_msg_;
-      current_status_ = DB_STATUS::DB_IDEL;
+      outside_buf = local_err_msg_;
     }
 
   private:
@@ -160,10 +159,10 @@ namespace mhwimm_db_ns {
     std::string local_err_msg_;
     bool more_row_indicator_;
 
-    constexpr const char *table_name_ = "mhwimm_db_table";
+    const char *table_name_ = "mhwimm_db_table";
 
     /* we must create table at the first time */
-    constexpr const char *sqlCreateTable_ =
+    const char *sqlCreateTable_ = 
       "CREATE TABLE mhwimm_db_table ("
       "mod_name CHAR NOT NULL,"
       "mod_path CHAR NOT NULL PRIMARY KEY,"

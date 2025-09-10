@@ -22,11 +22,12 @@
 #include <thread>
 #include <string>
 #include <memory>
+#include <functional>
 #include <iostream>
 
-constexpr char mhwimm_config_filename("mhwimm_config");
-constexpr char mhwimmroot_name("mhwimm");
-constexpr char mhwimm_db_name("mhwimm_db");
+constexpr const char *mhwimm_config_filename("mhwimm_config");
+constexpr const char *mhwimmroot_name("mhwimm");
+constexpr const char *mhwimm_db_name("mhwimm_db");
 
 mhwimm_sync_mechanism_ns::uiexemsgexchg uiexe_ctrl_msg = {
   .status = mhwimm_sync_mechanism_ns::UIEXE_STATUS::EXE_NOMSG,
@@ -40,7 +41,7 @@ std::mutex exedb_sync_mutex;
 
 static bool getenv_HOME(char *buf, std::size_t len);
 
-static bool mhwimm_need_initialization(const std::string &config_path)
+static bool mhwimm_need_initialization(const std::string &config_path);
 
 static bool ask_user_to_setup_mhwimmroot(mhwimm_config_ns::config_t &conf);
 
@@ -103,24 +104,23 @@ int main(void)
     }
 
     /* create config file */
-    if (!mhwimm_config_ns::makeup_config_file<config_t>(&conf,
+    if (!mhwimm_config_ns::makeup_config_file<mhwimm_config_ns::config_t>(&conf,
                                                         config_file_path.c_str())) {
       std::cerr << "Failed to makeup config file." << std::endl;
       return -1;
     }
   }
-  else if (!read_from_config<config_t>(&conf, config_file_path.c_str())) {
+  else if (!read_from_config<mhwimm_config_ns::config_t>(&conf, config_file_path.c_str())) {
     std::cerr << "Failed to read from config file." << std::endl;
     return -1;
   }
 
-  std::string db_path = conf.mhwimmroot + "/" + mhwimm_db_name;
+  std::string db_path = conf.mhwimmroot;
 
   /* install signal handlers */
-  struct sigaction siga = {
-    .sa_handler = SIGINT_handler,
-    .sa_flags = 0
-  };
+  struct sigaction siga;
+  siga.sa_handler = SIGINT_handler;
+  siga.sa_flags = 0;
 
   sigemptyset(&siga.sa_mask);
   sigaddset(&siga.sa_mask, SIGTERM);
@@ -153,9 +153,10 @@ int main(void)
   mhwimm_db_ns::mhwimm_db db(mhwimm_db_name, db_path.c_str());
   init_regDB_routines(&db);
 
-  std::thread ui_thread(mhwimm_ui_thread_worker, ui, uiexe_ctrl_msg);
-  std::thread exe_thread(mhwimm_executor_thread_worker, exe,uiexe_ctrl_msg, mfl);
-  std::thread db_thread(mhwimm_database_thread_worker, db);
+  std::thread ui_thread(mhwimm_ui_thread_worker, std::ref(ui), std::ref(uiexe_ctrl_msg));
+  std::thread exe_thread(mhwimm_executor_thread_worker, std::ref(exe), std::ref(uiexe_ctrl_msg),
+                         std::ref(mfl));
+  std::thread db_thread(mhwimm_db_thread_worker, std::ref(db));
 
   int sig = 0;
 
@@ -166,14 +167,16 @@ int main(void)
     std::cerr << "Error encountered when main thread doing signal wait." << std::endl;
   }
 
-  if (sig != SIGINT || sig != SIGTERM)
-    goto repeat_sigwait;
+  if (sig != SIGINT && sig != SIGTERM) {
+    if (!program_exit)
+      goto repeat_sigwait;
+  }
 
   db_thread.join();
   exe_thread.join();
   ui_thread.join();
 
-  mhwimm_config_ns::makeup_config_file<config_t>(&conf, config_file_path.c_str());
+  mhwimm_config_ns::makeup_config_file<mhwimm_config_ns::config_t>(&conf, config_file_path.c_str());
 
   return 0;
 }
@@ -215,8 +218,8 @@ static bool ask_user_to_setup_mhwimmroot(mhwimm_config_ns::config_t &conf)
   }
 
   std::cout << "full path of Monster Hunter World:Iceborne : ";
-  std::count.flush();
-  std::cin.getline(buf, path_max);
+  std::cout.flush();
+  std::cin.getline(buf.get(), path_max);
   if (std::cin.fail()) {
     std::cerr << "error detected when reading user input." << std::endl;
     return false;

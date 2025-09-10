@@ -7,7 +7,7 @@
 
 namespace mhwimm_ui_ns {
 
-  class mhwimm_ui finally {
+  class mhwimm_ui final {
   public:
     mhwimm_ui() :
       local_msg_buffer_("nil"),
@@ -28,14 +28,14 @@ namespace mhwimm_ui_ns {
      */
     void printPrompt(void)
     {
-      std::cout << prompt_msg_ << flush;
+      std::cout << prompt_msg_ << std::flush;
     }
     
     /* printStartupMsg - print startup msg */
     void printStartupMsg(void)
     {
       printPrompt();
-      std::cout << startup_msg_ << flush;
+      std::cout << startup_msg_ << std::flush;
     }
 
     /**
@@ -43,9 +43,9 @@ namespace mhwimm_ui_ns {
      * @msg:          referrence to std::string object which holds the
      *                message from Command Module
      */
-    void printMessage(std::string &msg)
+    void printMessage(const std::string &msg)
     {
-      std::cout << msg << flush;
+      std::cout << msg << std::flush;
     }
 
     /**
@@ -67,9 +67,9 @@ namespace mhwimm_ui_ns {
     void printIndentSpaces(void)
     {
       char indent[space_indent_ + 1] = {0};
-      for (auto i : space_indent_ - 1)
+      for (unsigned short i(0); i < space_indent_; ++i)
         indent[i] = ' ';
-      std::cout << indent << flush;
+      std::cout << indent << std::flush;
     }
 
     /* newLine - start a new line */

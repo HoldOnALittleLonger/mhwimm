@@ -11,7 +11,7 @@ namespace mhwimm_ui_ns {
     char tmp_cbuf[MAX_INPUT_LENGTH] = {0};
     std::cin.getline(tmp_cbuf, MAX_INPUT_LENGTH);
     
-    if (cin.fail())
+    if (std::cin.fail())
       return -1;
 
     std::size_t readed(std::cin.gcount());

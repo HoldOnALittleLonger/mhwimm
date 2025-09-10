@@ -9,13 +9,13 @@ extern mhwimm_db_ns::interest_db_field_t interest_field;
 
 void init_regDB_routines(mhwimm_db_ns::mhwimm_db *db)
 {
-  db_impl = impl;
+  db_impl = db;
 }
 
 /* request DB returns all mods' names in @mfl */
 void regDBop_getAllInstalled_Modsname(mhwimm_sync_mechanism_ns::mod_files_list *mfl)
 {
-  asset(impl != nullptr);
+  assert(db_impl != nullptr);
   mfl_for_db = mfl;
   interest_field = mhwimm_db_ns::INTEREST_FIELD::INTEREST_NAME;
   mhwimm_db_ns::db_table_record dtr = {0};
@@ -26,7 +26,7 @@ void regDBop_getAllInstalled_Modsname(mhwimm_sync_mechanism_ns::mod_files_list *
 void regDBop_getInstalled_Modinfo(const std::string &modname,
                                   mhwimm_sync_mechanism_ns::mod_files_list *mfl)
 {
-  asset(impl != nullptr);
+  assert(db_impl != nullptr);
   mfl_for_db = mfl;
   interest_field = mhwimm_db_ns::INTEREST_FIELD::INTEREST_PATH;
   mhwimm_db_ns::db_table_record dtr = {
@@ -42,7 +42,7 @@ void regDBop_getInstalled_Modinfo(const std::string &modname,
 void regDBop_add_mod_info(const std::string &modname,
                           mhwimm_sync_mechanism_ns::mod_files_list *mfl)
 {
-  asset(impl != nullptr);
+  assert(db_impl != nullptr);
   mfl_for_db = mfl;
   mhwimm_db_ns::db_table_record dtr = {
     .is_mod_name_set = 1,

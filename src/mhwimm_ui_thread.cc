@@ -3,8 +3,7 @@
 
 #include <assert.h>
 
-using mhwimm_sync_mechanism_ns::uiexemsgexchg, mhwimm_sync_mechanism_ns::program_exit;
-
+using namespace mhwimm_sync_mechanism_ns;
 
 /**
  * mhwimm_ui_thread_worker - UI module control thread
@@ -14,11 +13,11 @@ using mhwimm_sync_mechanism_ns::uiexemsgexchg, mhwimm_sync_mechanism_ns::program
  */
 void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlmsg)
 {
-  std::unique_lock::unique_lock uiexe_mutex_lock(&ctrlmsg.lock);
+  std::unique_lock uiexe_mutex_lock(ctrlmsg.lock);
 
   mmui.printStartupMsg();
-
   for (; ;) {
+
     /* command event cycle */
     mmui.newLine();
 
@@ -51,10 +50,13 @@ void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlm
       continue;
     }
 
-    ctrlmsg.status = UIEXE_STATUS::UICMD;
+    ctrlmsg.status = UIEXE_STATUS::UI_CMD;
     mmui.sendCMDTo(ctrlmsg.io_buf);
 
     uiexe_mutex_lock.unlock();
+
+    NOP_DELAY();
+
 
     /**
      * CMD module handling user command
@@ -80,7 +82,9 @@ void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlm
       uiexe_mutex_lock.unlock(); // if more than one line info have to be printed,
                                  // then we can release the lock and let Executor
                                  // updates the msg buffer.
+      NOP_DELAY();
     }
+
   }
 
   mmui.printMessage(std::string{"Program exiting."});

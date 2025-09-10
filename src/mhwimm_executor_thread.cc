@@ -1,9 +1,10 @@
-#include "mhwimmc_executor_thread.h"
-#include "mhwimmc_sync_mechanism.h"
+#include "mhwimm_executor_thread.h"
+#include "mhwimm_sync_mechanism.h"
 
 #include <cstddef>
-
 #include <assert.h>
+
+using namespace mhwimm_executor_ns;
 
 /**
  * mhwimm_executor_thread_worker - thread worker for Executor
@@ -20,10 +21,10 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
                                    mhwimm_sync_mechanism_ns::uiexemsgexchg &ctrlmsg,
                                    mhwimm_sync_mechanism_ns::mod_files_list &mfiles_list)
 {
-
   using mhwimm_sync_mechanism_ns::UIEXE_STATUS;
+
   // lock EXE DB to stop DB event cycle.
-  std::unique_lock<decltype(exedb_sync_mutex)> exedb_lock(&exedb_sync_mutex);
+  std::unique_lock<decltype(exedb_sync_mutex)> exedb_lock(exedb_sync_mutex);
   exe.setMFLImpl(&mfiles_list);
 
   for (; ;) {
@@ -39,12 +40,16 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
     if (program_exit) // shall we stop and exit?
       break;
 
+    NOP_DELAY();
     // try to lock ctrl msg object for get user input.
-    std::unique_lock<decltype(ctrlmsg.lock)> exeui_lock(&ctrlmsg.lock);
+    std::unique_lock<decltype(ctrlmsg.lock)> exeui_lock(ctrlmsg.lock);
     
     // if the status is not UI_CMD when entered Executor thread,then
     // there must be a fatal error was encountered.
-    assert(ctrlmsg.status == UIEXE_STATUS::UI_CMD);
+    //    assert(ctrlmsg.status == UIEXE_STATUS::UI_CMD);
+
+    if (program_exit)
+      break;
 
     int ret = exe.parseCMD(ctrlmsg.io_buf);
     /* we failed to parse command input */
@@ -125,8 +130,10 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
       }
       ctrlmsg.status = UIEXE_STATUS::EXE_MOREMSG;
       exeui_lock.unlock();
+      NOP_DELAY();
       exeui_lock.lock();
     }
+
 
   }
 
