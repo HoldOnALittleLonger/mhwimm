@@ -6,16 +6,18 @@
 #include <exception>
 #include <functional>
 
+#ifdef DEBUG
 // for debug
 #include <iostream>
+#endif
 
+#include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
 #include <signal.h>
-// for debug
-#include <errno.h>
+
 #include <string.h>
 
 namespace mhwimm_executor_ns {
@@ -28,8 +30,6 @@ namespace mhwimm_executor_ns {
 #define ERROR_MSG_ERRFORM "error: Incorrect format."
 #define ERROR_MSG_UNKNOWNCMD "error: Unknown cmd."
 #define ERROR_MSG_UNKNOWNCONF "error: Unknown conf."
-#define ERROR_MSG_FNOEXIST "error: No such file or directory."
-#define ERROR_MSG_DBREQ_FAILED "error: Database OP failed."
 #define ERROR_MSG_TRAVERSE_DIR "error: Failed to traverse directory."
 #define ERROR_MSG_LINK "error: Failed to install mod."
 #define ERROR_MSG_UNINSTALL "error: Failed to uninstall mod."
@@ -78,6 +78,7 @@ namespace mhwimm_executor_ns {
     const char *arg(strtok(cmd_tmp_buf, " "));
 
     bool parse_more(false);
+    nparams_ = 0; // reset number of parameters
 
     switch (calculate_key(arg)) {
     case EXIT_CMD_KEY:
@@ -114,7 +115,6 @@ namespace mhwimm_executor_ns {
     }
 
     if (parse_more) {
-      nparams_ = 0; // reset number of parameters
       while ((arg = strtok(NULL, " "))) {
         parameters_[nparams_++] = arg;
       }
@@ -141,8 +141,10 @@ namespace mhwimm_executor_ns {
         current_status_ == mhwimm_executor_status::WORKING)
       return -1;
 
+#ifdef DEBUG
     std::cerr << "noutput_msgs_ = " << noutput_msgs_ << std::endl;
     std::cerr << "nparams_ = " << nparams_ << std::endl;
+#endif
 
     current_status_ = mhwimm_executor_status::WORKING;
     noutput_msgs_ = 0;
@@ -165,7 +167,7 @@ namespace mhwimm_executor_ns {
         return uninstall();
       goto err_syntax;
     case mhwimm_executor_cmd::INSTALLED:
-      if (cmd_uninstall_syntaxChecking())
+      if (cmd_installed_syntaxChecking())
         return installed();
       goto err_syntax;
     case mhwimm_executor_cmd::CONFIG:
@@ -221,16 +223,25 @@ namespace mhwimm_executor_ns {
 
     struct dirent *dentry(NULL);
     noutput_msgs_ = 0;
+
+#ifdef DEBUG
     int ndentries(0);
+#endif
 
     while ((dentry = readdir(this_dir))) {
+
+#ifdef DEBUG
       ++ndentries;
+#endif
+
       rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);
       cmd_output_msgs_[noutput_msgs_++] = std::string{dentry->d_name};
     }
     (void)closedir(this_dir);
 
+#ifdef DEBUG
     std::cerr << "number of dentries : " << ndentries << std::endl;
+#endif
 
     current_status_ = mhwimm_executor_status::IDLE;
     is_cmd_has_output_ = true;
@@ -365,11 +376,13 @@ namespace mhwimm_executor_ns {
 
     auto mhwiroot(conf_->mhwiroot);
 
+#ifdef DEBUG
     std::cerr << "Debug : " << std::endl;
     for (auto i : mfiles_list_->directory_list)
       std::cerr << " dentry: " << i << std::endl;
     for (auto i : mfiles_list_->regular_file_list)
       std::cerr << " dentry: " << i << std::endl;
+#endif
 
     char path_tmp[256] = {0};
     std::string cwd(getcwd(path_tmp, 256));
@@ -383,13 +396,17 @@ namespace mhwimm_executor_ns {
     // mkdirs
     for (auto i : mfiles_list_->directory_list) {
       std::string newpath(mhwiroot + i);
+
+#ifdef DEBUG
       errno = 0;
+#endif
       if (mkdir(newpath.c_str(), mhwiroot_stat.st_mode) < 0) {
-        if (errno != EEXIST) {
+#ifdef DEBUG
+        if (errno != EEXIST)
           std::cerr << strerror(errno) << std::endl;
-          generic_err_msg_output(ERROR_MSG_MKDIR);
-          goto err_exit_remove_dir;
-        }
+#endif
+        generic_err_msg_output(ERROR_MSG_MKDIR);
+        goto err_exit_remove_dir;
       }
     }
 
@@ -398,9 +415,13 @@ namespace mhwimm_executor_ns {
       std::string oldpath(cwd + "/" + moddir + i);
       std::string newpath(mhwiroot + i);
 
+#ifdef DEBUG
       errno = 0;
+#endif
       if (link(oldpath.c_str(), newpath.c_str()) < 0) {
+#ifdef DEBUG
         std::cerr << strerror(errno) << std::endl;
+#endif
         generic_err_msg_output(ERROR_MSG_LINK);
         goto err_exit_unlink_file;
       }
@@ -472,11 +493,14 @@ namespace mhwimm_executor_ns {
     }
 
     if (rf_err || d_err) {
-      cmd_output_msgs_[0] = std::string{ERROR_MSG_UNINSTALL};
+      std::size_t nmsgs(noutput_msgs_);
+      generic_err_msg_output(ERROR_MSG_UNINSTALL);
+      noutput_msgs_ = nmsgs;
       current_status_ = mhwimm_executor_status::ERROR;
       return -1;
     }
 
+    noutput_msgs_ = 0;
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
   }
@@ -495,6 +519,12 @@ namespace mhwimm_executor_ns {
       current_status_ = mhwimm_executor_status::ERROR;
       return -1;
     }
+
+#ifdef DEBUG
+    std::cerr << "Command - installed - number of elements in list: "
+              << nes
+              << std::endl;
+#endif
 
     for (auto e : mfiles_list_->mod_name_list) {
       rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);

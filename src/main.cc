@@ -39,6 +39,9 @@ atomic_t program_exit = 0;
 
 std::mutex exedb_sync_mutex;
 
+const typename mhwimm_config_ns::get_config_traits<mhwimm_config_ns::config_t>::skey_t *
+pmhwiroot_path(nullptr);
+
 static bool getenv_HOME(char *buf, std::size_t len);
 
 static bool mhwimm_need_initialization(const std::string &config_path);
@@ -142,6 +145,7 @@ int main(void)
   sigaddset(&siga.sa_mask, SIGINT);
   sigaddset(&siga.sa_mask, SIGTERM);
 
+  pmhwiroot_path = &conf.mhwiroot;
   // print the paths
   std::cout << "userhome: " << conf.userhome
             << "\nmhwiroot: " << conf.mhwiroot

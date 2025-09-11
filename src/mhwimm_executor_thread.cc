@@ -1,8 +1,10 @@
 #include "mhwimm_executor_thread.h"
 #include "mhwimm_sync_mechanism.h"
 
+#ifdef DEBUG
 // for debug
 #include <iostream>
+#endif
 
 #include <cstddef>
 #include <assert.h>
@@ -132,6 +134,10 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
       break;
     }
 
+#ifdef DEBUG
+    std::size_t sget(0);
+#endif
+
     // the last command accomplished without any error,now we can send
     // cmd output to UI.
     ctrlmsg.new_msg = 0;
@@ -151,12 +157,20 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
         break;
       }
 
+#ifdef DEBUG
+      sget++;
+#endif
+
       ctrlmsg.status = UIEXE_STATUS::EXE_MOREMSG;
       ctrlmsg.new_msg = 1;
       exeui_lock.unlock();
       NOP_DELAY();
       exeui_lock.lock();
     }
+
+#ifdef DEBUG
+    std::cerr << "\n Count succeed get command output msg : " << sget << std::endl;
+#endif
   }
 
 }

@@ -165,12 +165,10 @@ namespace mhwimm_db_ns {
     const char *sqlCreateTable_ = 
       "CREATE TABLE mhwimm_db_table ("
       "mod_name CHAR NOT NULL,"
-      "mod_path CHAR NOT NULL PRIMARY KEY,"
+      "file_path CHAR NOT NULL PRIMARY KEY,"
       "install_date CHAR NOT NULL);";
   };
 
 }
-
-
 
 #endif

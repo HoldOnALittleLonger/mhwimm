@@ -1,9 +1,12 @@
 #include "mhwimm_database_thread.h"
 #include "mhwimm_database.h"
 #include "mhwimm_sync_mechanism.h"
+#include "mhwimm_config.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <errno.h>
+#include <assert.h>
 
 #include <chrono>
 #include <iostream>
@@ -21,6 +24,9 @@ mhwimm_db_ns::interest_db_field_t interest_field(mhwimm_db_ns::INTEREST_FIELD::N
 /* reg helper will setup this pointer variable */
 mhwimm_sync_mechanism_ns::mod_files_list *mfl_for_db(nullptr);
 
+extern typename mhwimm_config_ns::get_config_traits<mhwimm_config_ns::config_t>::skey_t *
+pmhwiroot_path;
+
 // caller must ensures @db been opened
 // we do not check it at there
 /**
@@ -33,8 +39,10 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     auto db_file_path(db.returnDBpath());
     struct stat the_stat = {0};
     bool need_create_table(false);
+    errno = 0;
     if (stat(db_file_path.c_str(), &the_stat) < 0)
-      need_create_table = true;
+      if (errno == ENOENT)
+        need_create_table = true;
 
     std::string err_msg;
     if (db.openDB() < 0) {
@@ -44,6 +52,9 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     }
 
     if (need_create_table) {
+#ifdef DEBUG
+      std::cerr << "Prepare to create table." << std::endl;
+#endif
       /**
        * we'll create table at the first time to launch this application.
        */
@@ -69,27 +80,43 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     ret = db.executeDBOperation();
 
     if (!ret && db.getCurrentStatus() == mhwimm_db_ns::DB_STATUS::DB_WORKING) {
-
       if (interest_field == mhwimm_db_ns::INTEREST_FIELD::INTEREST_NAME) {
         std::string mod_name;
         ret = db.getFieldValue(name_idx, mod_name);
         if (ret < 0)
           goto err_getField;
-        mfl_for_db->mod_name_list.insert(mfl_for_db->mod_name_list.begin(), mod_name);
+        mfl_for_db->regular_file_list.insert(mfl_for_db->regular_file_list.begin(), mod_name);
         goto repeat_get;
       } else if (interest_field == mhwimm_db_ns::INTEREST_FIELD::INTEREST_PATH) {
+        assert(pmhwiroot_path != nullptr);
         std::string file_path;
+        std::string stat_file_path(*pmhwiroot_path);
         struct stat the_stat = {0};
         ret = db.getFieldValue(path_idx, file_path);
         if (ret)
           goto err_getField;
 
-        ret = stat(file_path.c_str(), &the_stat);
+        errno = 0;
+        stat_file_path += file_path;
+
+#ifdef DEBUG
+        std::cerr << "db thread: SQL_ASK - stat path - " << stat_file_path << std::endl;
+#endif
+
+        ret = stat(stat_file_path.c_str(), &the_stat);
         if (ret < 0) {
-          std::string err_msg = std::string{"error: file - "} + file_path + " does not exist.";
-          std::cerr << err_msg << std::endl;
-          db.chgDBStatus(mhwimm_db_ns::DB_STATUS::DB_ERROR);
-          return;
+          if (errno == ENOENT) {
+            std::string err_msg = std::string{"db thread error: file - "} + file_path + " does not exist.";
+            std::cerr << err_msg << std::endl;
+            db.chgDBStatus(mhwimm_db_ns::DB_STATUS::DB_ERROR);
+            return;
+          } else {
+            std::cerr << "db thread error: cannot retrieve file's stat info - "
+                      << file_path
+                      << std::endl;
+            db.chgDBStatus(mhwimm_db_ns::DB_STATUS::DB_ERROR);
+            return;
+          }
         } else if (S_ISDIR(the_stat.st_mode)) {
           mfl_for_db->directory_list.insert(mfl_for_db->directory_list.begin(), file_path);
         } else {
@@ -98,28 +125,39 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
         goto repeat_get;
       }
       else {
-        std::string err_msg("error: this regDBop has not be implemented.");
+        std::string err_msg("db thread error: this regDBop has not be implemented.");
         std::cerr << err_msg << std::endl;
         db.chgDBStatus(mhwimm_db_ns::DB_STATUS::DB_ERROR);
         return;
       }
 
-    } else if (!ret) {
-      /**
-       * no more result can be got,method executeDBOperation() returned _zero_,
-       * and in this case,db status must be DB_IDLE.
-       */
-      if (interest_field == mhwimm_db_ns::INTEREST_FIELD::INTEREST_NAME)
-        mfl_for_db->mod_name_list.reverse();
-      else {
-        mfl_for_db->directory_list.reverse();
-        mfl_for_db->regular_file_list.reverse();
+    } else if (db.getCurrentStatus() == mhwimm_db_ns::DB_STATUS::DB_ERROR)
+      goto err_execute;
+
+    /**
+     * no more result can be got,method executeDBOperation() returned _zero_,
+     * and in this case,db status must be DB_IDLE.
+     */
+
+    if (interest_field == mhwimm_db_ns::INTEREST_FIELD::INTEREST_NAME) {
+      // make mod name unique.
+      // because for each fiel,DB always construct one record and insert
+      // it.for the mod have more files,then there are more records,
+      // and each record contains the mod name.
+
+      std::string last_placed{"BUG"};
+      for (auto e : mfl_for_db->regular_file_list) {
+        if (last_placed != e) {
+          last_placed = e;
+          mfl_for_db->mod_name_list.insert(mfl_for_db->mod_name_list.begin(), last_placed);
+        }
       }
     }
 
-    /* error detected when executing DB operation */
-  err_executeDB:
+    return;
 
+  err_execute:
+    /* error detected when executing DB operation */
   err_getField:
     std::string err_msg;
     db.getDBErrMsg(err_msg);
@@ -149,6 +187,10 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     for (auto e : mfl_for_db->directory_list) {
       dtr.file_path = e;
 
+#ifdef DEBUG
+      std::cerr << "SQL_ADD - directory path - " << e << std::endl;
+#endif
+
       db.registerDBOperation(mhwimm_db_ns::SQL_OP::SQL_ADD, dtr);
       db.executeDBOperation();
       
@@ -159,6 +201,10 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     /* step2 : import regular file list */
     for (auto e : mfl_for_db->regular_file_list) {
       dtr.file_path = e;
+
+#ifdef DEBUG
+      std::cerr << "SQL_ADD - regular file path - " << e << std::endl;
+#endif
 
       db.registerDBOperation(mhwimm_db_ns::SQL_OP::SQL_ADD, dtr);
       db.executeDBOperation();
@@ -206,13 +252,12 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
   for (; ;) {
     if (program_exit)
       break;
-
     db.resetDB();
 
+    NOP_DELAY();
     std::unique_lock<decltype(exedb_sync_mutex)> exedb_lock(exedb_sync_mutex);
 
     // DB operation will be registered by Executor via call to register helpers.
-    
     switch (db.getCurrentOP()) {
     case mhwimm_db_ns::SQL_OP::SQL_ASK:
       do_DB_ask();
@@ -226,9 +271,8 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     default:
       continue; /* un-supported command or SQL_NOP */
     }
-
+    is_db_op_succeed = true;
     if (db.getCurrentStatus() == mhwimm_db_ns::DB_STATUS::DB_ERROR)
       is_db_op_succeed = false;
-    is_db_op_succeed = true;
   }
 }
