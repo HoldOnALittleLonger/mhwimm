@@ -142,6 +142,12 @@ int main(void)
   sigaddset(&siga.sa_mask, SIGINT);
   sigaddset(&siga.sa_mask, SIGTERM);
 
+  // print the paths
+  std::cout << "userhome: " << conf.userhome
+            << "\nmhwiroot: " << conf.mhwiroot
+            << "\nmhwimmroot: " << conf.mhwimmroot
+            << std::endl;
+
   /* prepare threads */
   mhwimm_ui_ns::mhwimm_ui ui;
   mhwimm_executor_ns::mhwimm_executor exe(&conf);

@@ -111,6 +111,7 @@ namespace mhwimm_executor_ns {
     void resetStatus(void) noexcept
     {
       current_status_ = mhwimm_executor_status::IDLE;
+      current_cmd_ = mhwimm_executor_cmd::NOP;
     }
 
     void setMFLImpl(mhwimm_sync_mechanism_ns::mod_files_list *mfl) { mfiles_list_ = mfl; }

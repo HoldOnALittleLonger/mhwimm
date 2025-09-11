@@ -20,6 +20,7 @@ void regDBop_getAllInstalled_Modsname(mhwimm_sync_mechanism_ns::mod_files_list *
   interest_field = mhwimm_db_ns::INTEREST_FIELD::INTEREST_NAME;
   mhwimm_db_ns::db_table_record dtr = {0};
   db_impl->registerDBOperation(mhwimm_db_ns::SQL_OP::SQL_ASK, dtr);
+
 }
 
 /* request DB returns the detail info about a specified mod in @mfl */

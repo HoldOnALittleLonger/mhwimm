@@ -28,6 +28,7 @@ namespace mhwimm_sync_mechanism_ns {
   enum class UIEXE_STATUS : uint8_t { EXE_NOMSG, EXE_ONEMSG, EXE_MOREMSG, UI_CMD };
   struct uiexemsgexchg {
     UIEXE_STATUS status;
+    unsigned int new_msg:1;
     std::string io_buf;
     std::mutex lock;
   };

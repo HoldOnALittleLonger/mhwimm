@@ -49,36 +49,43 @@ void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlm
     }
 
     ctrlmsg.status = UIEXE_STATUS::UI_CMD;
+    ctrlmsg.new_msg = 0;
     mmui.sendCMDTo(ctrlmsg.io_buf);
 
     uiexe_mutex_lock.unlock();
-
-    NOP_DELAY();
-
 
     /**
      * CMD module handling user command
      * UI module have to wait for it accomplished and get output
      */
     for (; ;) {
+      NOP_DELAY();
       uiexe_mutex_lock.lock();
 
-      if (ctrlmsg.status == UIEXE_STATUS::EXE_ONEMSG) {
-        mmui.newLine();
-        mmui.printIndentSpaces();
-        mmui.printMessage(ctrlmsg.io_buf);
+      // wait Executor respones
+      // sometimes,lock the mutex again too fast will cause Executor
+      // stay blocked and the command will have not parsed.
+      if (ctrlmsg.status == UIEXE_STATUS::UI_CMD) {
+        uiexe_mutex_lock.unlock();
+        continue;
+      }
+
+      if (ctrlmsg.status == UIEXE_STATUS::EXE_NOMSG)
         break;
-      } else if (ctrlmsg.status == UIEXE_STATUS::EXE_MOREMSG) {
+
+      if (ctrlmsg.new_msg) {
         mmui.newLine();
         mmui.printIndentSpaces();
         mmui.printMessage(ctrlmsg.io_buf);
-      } else
+        ctrlmsg.new_msg = 0;
+      }
+
+      if (ctrlmsg.status == UIEXE_STATUS::EXE_ONEMSG)
         break;
 
       uiexe_mutex_lock.unlock(); // if more than one line info have to be printed,
                                  // then we can release the lock and let Executor
                                  // updates the msg buffer.
-      NOP_DELAY();
     }
 
   }

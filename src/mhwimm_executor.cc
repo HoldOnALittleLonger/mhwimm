@@ -6,6 +6,7 @@
 #include <exception>
 #include <functional>
 
+// for debug
 #include <iostream>
 
 #include <unistd.h>
@@ -13,12 +14,17 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <signal.h>
+// for debug
+#include <errno.h>
+#include <string.h>
 
 namespace mhwimm_executor_ns {
 
 #define ERROR_MSG_MEM "error: Failed to allocate memory."
 #define ERROR_MSG_CHDIR "error: Failed enter the directory."
 #define ERROR_MSG_OPENDIR "error: Failed to open directory."
+#define ERROR_MSG_MKDIR "error: Failed to make a directory."
+#define ERROR_MSG_STATPATH "error: Can not retrieve the stat of path."
 #define ERROR_MSG_ERRFORM "error: Incorrect format."
 #define ERROR_MSG_UNKNOWNCMD "error: Unknown cmd."
 #define ERROR_MSG_UNKNOWNCONF "error: Unknown conf."
@@ -26,7 +32,8 @@ namespace mhwimm_executor_ns {
 #define ERROR_MSG_DBREQ_FAILED "error: Database OP failed."
 #define ERROR_MSG_TRAVERSE_DIR "error: Failed to traverse directory."
 #define ERROR_MSG_LINK "error: Failed to install mod."
-#define ERROR_MSG_UNLINK "error: Failed to uninstall mod."
+#define ERROR_MSG_UNINSTALL "error: Failed to uninstall mod."
+#define ERROR_MSG_NOMODINS "error: No mod been installed."
 
   static int32_t calculate_key(const char *cmd_str)
   {
@@ -136,7 +143,6 @@ namespace mhwimm_executor_ns {
 
     std::cerr << "noutput_msgs_ = " << noutput_msgs_ << std::endl;
     std::cerr << "nparams_ = " << nparams_ << std::endl;
-    std::cerr << "size of cmd_output_msgs_ " << cmd_output_msgs_.size() << std::endl;
 
     current_status_ = mhwimm_executor_status::WORKING;
     noutput_msgs_ = 0;
@@ -215,23 +221,16 @@ namespace mhwimm_executor_ns {
 
     struct dirent *dentry(NULL);
     noutput_msgs_ = 0;
+    int ndentries(0);
 
     while ((dentry = readdir(this_dir))) {
-
-      switch(strlen(dentry->d_name)) {
-      case 1:
-        if ((*(dentry->d_name)) == '.')
-          continue;
-      case 2:
-        if ((*(dentry->d_name)) == '.' &&
-            (*(dentry->d_name + 1)) == '.')
-          continue;
-      }
-
+      ++ndentries;
       rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);
       cmd_output_msgs_[noutput_msgs_++] = std::string{dentry->d_name};
     }
     (void)closedir(this_dir);
+
+    std::cerr << "number of dentries : " << ndentries << std::endl;
 
     current_status_ = mhwimm_executor_status::IDLE;
     is_cmd_has_output_ = true;
@@ -244,8 +243,7 @@ namespace mhwimm_executor_ns {
     // because of that the other control path will change this
     // indicator is the signal handler
     current_status_ = mhwimm_executor_status::WORKING;
-    program_exit = true;
-    kill(getpid(), SIGINT);
+    kill(getpid(), SIGINT); // trigger SIGINT handler
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
   }
@@ -294,12 +292,6 @@ namespace mhwimm_executor_ns {
   int mhwimm_executor::install(void) noexcept
   {
     current_status_ = mhwimm_executor_status::WORKING;
-    // install [ mod name ] [ mod directory ]
-    if (nparams_ != 2) {
-      current_status_ = mhwimm_executor_status::ERROR;
-      generic_err_msg_output(ERROR_MSG_ERRFORM);
-      return -1;
-    }
 
     std::string modname(parameters_[0]);
     std::string moddir(parameters_[1]);
@@ -310,13 +302,15 @@ namespace mhwimm_executor_ns {
      * return:           0 OR -1
      * # front-inserting
      */
-    std::function<int(const std::string &)> lf_traverse_dir = [&, this](const std::string &parent_dir) -> int {
-      DIR *this_dir = opendir(parent_dir.c_str());
+    std::function<int(const std::string &, const std::string &)> lf_traverse_dir =
+      [&, this](const std::string &moddir, const std::string &subpath) -> int {
+      std::string opendir_path(moddir + "/" + subpath);
+
+      DIR *this_dir = opendir(opendir_path.c_str());
       if (!this_dir) {
         generic_err_msg_output(ERROR_MSG_OPENDIR);
         return -1;
       }
-      mfiles_list_->directory_list.insert(mfiles_list_->directory_list.begin(), parent_dir);
 
       int ret(0);
 
@@ -331,19 +325,27 @@ namespace mhwimm_executor_ns {
             continue;
         }
         
+        /**
+         * append dentry->d_name to @parent_dir.
+         */
+
+        std::string dentry_path(opendir_path + "/" + dentry->d_name);
+        std::string dentry_subpath(subpath + "/" + dentry->d_name);
         struct stat dentry_stat = {0};
-        if (stat(dentry->d_name, &dentry_stat) < 0) {
+
+        if (stat(dentry_path.c_str(), &dentry_stat) < 0) {
           ret = -1;
           break;
         } else if (dentry_stat.st_mode & S_IFDIR) {
-          ret = lf_traverse_dir(parent_dir + "/" + dentry->d_name);
-          return ret;
-        } else if (dentry_stat.st_mode & S_IFLNK)
+          mfiles_list_->directory_list.insert(mfiles_list_->directory_list.end(), dentry_subpath);
+          ret = lf_traverse_dir(moddir, dentry_subpath);
+          if (ret) // returned -1
+            return ret;
+        } else if (dentry_stat.st_mode & S_IFREG) {
+          mfiles_list_->regular_file_list.insert(mfiles_list_->regular_file_list.end(),
+                                                 dentry_subpath);
+        } else if (dentry_stat.st_mode & S_IFLNK) // skip symlink
           continue;
-
-        // regular file
-        mfiles_list_->regular_file_list.insert(mfiles_list_->regular_file_list.begin(),
-                                               std::string{parent_dir + "/" + dentry->d_name});
       }
 
       (void)closedir(this_dir);
@@ -355,8 +357,7 @@ namespace mhwimm_executor_ns {
     mfiles_list_->regular_file_list.clear();
     mfiles_list_->directory_list.clear();
 
-
-    if (lf_traverse_dir(moddir) < 0) {
+    if (lf_traverse_dir(moddir, std::string{"\0"}) < 0) {
       generic_err_msg_output(ERROR_MSG_TRAVERSE_DIR);
       current_status_ = mhwimm_executor_status::ERROR;
       return -1;
@@ -364,17 +365,42 @@ namespace mhwimm_executor_ns {
 
     auto mhwiroot(conf_->mhwiroot);
 
-    // link directories
+    std::cerr << "Debug : " << std::endl;
+    for (auto i : mfiles_list_->directory_list)
+      std::cerr << " dentry: " << i << std::endl;
+    for (auto i : mfiles_list_->regular_file_list)
+      std::cerr << " dentry: " << i << std::endl;
+
+    char path_tmp[256] = {0};
+    std::string cwd(getcwd(path_tmp, 256));
+    struct stat mhwiroot_stat = {0};
+
+    if (stat(mhwiroot.c_str(), &mhwiroot_stat) < 0) {
+      generic_err_msg_output(ERROR_MSG_STATPATH);
+      goto err_exit;
+    }
+
+    // mkdirs
     for (auto i : mfiles_list_->directory_list) {
-      if (link(i.c_str(), (mhwiroot + "/" + i).c_str()) < 0) {
-        generic_err_msg_output(ERROR_MSG_LINK);
-        goto err_exit_unlink_dir;
+      std::string newpath(mhwiroot + i);
+      errno = 0;
+      if (mkdir(newpath.c_str(), mhwiroot_stat.st_mode) < 0) {
+        if (errno != EEXIST) {
+          std::cerr << strerror(errno) << std::endl;
+          generic_err_msg_output(ERROR_MSG_MKDIR);
+          goto err_exit_remove_dir;
+        }
       }
     }
 
     // link regular files
     for (auto i : mfiles_list_->regular_file_list) {
-      if (link(i.c_str(), (mhwiroot + "/" + i).c_str()) < 0) {
+      std::string oldpath(cwd + "/" + moddir + i);
+      std::string newpath(mhwiroot + i);
+
+      errno = 0;
+      if (link(oldpath.c_str(), newpath.c_str()) < 0) {
+        std::cerr << strerror(errno) << std::endl;
         generic_err_msg_output(ERROR_MSG_LINK);
         goto err_exit_unlink_file;
       }
@@ -385,11 +411,18 @@ namespace mhwimm_executor_ns {
 
   err_exit_unlink_file:
     for (auto i : mfiles_list_->regular_file_list)
-      unlink((mhwiroot + "/" + i).c_str());
+      unlink((mhwiroot + i).c_str());
 
-  err_exit_unlink_dir:
+  err_exit_remove_dir:
+    // we need to reverse elements that is because we
+    // insert them at end of container,and the last
+    // element must bethe last directory,because we
+    // traverse directory followed the rule -
+    // always start a new recursion for traverse the
+    // new directory whenever we encountered it.
+    mfiles_list_->directory_list.reverse();
     for (auto i : mfiles_list_->directory_list)
-      unlink((mhwiroot + "/" + i).c_str());
+      rmdir((mhwiroot + i).c_str());
 
   err_exit:
     current_status_ = mhwimm_executor_status::ERROR;
@@ -404,36 +437,42 @@ namespace mhwimm_executor_ns {
     // this work will hand over to worker thread.
     current_status_ = mhwimm_executor_status::WORKING;
 
-    if (nparams_ != 1) {
-      generic_err_msg_output(ERROR_MSG_ERRFORM);
-      current_status_ = mhwimm_executor_status::ERROR;
-      return -1;
-    }
-
     // acquire list lock
     std::unique_lock<decltype(mfiles_list_->lock)> mfl_lock(mfiles_list_->lock);
 
     /**
      * step1 : remove all regular files
      * step2 : remove all directories
+     * the records returned by DB would follow this format :
+     *   /aaa/bbb/ccc
      */
 
     auto mhwiroot(conf_->mhwiroot);
+    noutput_msgs_++;
 
     uint8_t rf_err(0);
     for (auto i : mfiles_list_->regular_file_list) {
-      if (unlink((mhwiroot + "/" + i).c_str()) < 0)
+      std::string filepath(mhwiroot + i);
+      if (unlink(filepath.c_str()) < 0) {
         rf_err = 1;
+        rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);
+        // record the file's path which unlink failed on
+        cmd_output_msgs_[noutput_msgs_++] = filepath;
+      }
     }
 
     uint8_t d_err(0);
     for (auto i : mfiles_list_->directory_list) {
-      if (unlink((mhwiroot + "/" + i).c_str()) < 0)
+      std::string dirpath(mhwiroot + i);
+      if (rmdir(dirpath.c_str()) < 0) {
         d_err = 1;
+        rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);
+        cmd_output_msgs_[noutput_msgs_++] = dirpath;
+      }
     }
 
     if (rf_err || d_err) {
-      generic_err_msg_output(ERROR_MSG_UNLINK);
+      cmd_output_msgs_[0] = std::string{ERROR_MSG_UNINSTALL};
       current_status_ = mhwimm_executor_status::ERROR;
       return -1;
     }
@@ -450,15 +489,16 @@ namespace mhwimm_executor_ns {
     current_status_ = mhwimm_executor_status::WORKING;
 
     std::unique_lock<decltype(mfiles_list_->lock)> mfl_lock(mfiles_list_->lock);
-    noutput_msgs_ = mfiles_list_->mod_name_list.size();
-    if (!noutput_msgs_) {
-      cmd_output_msgs_[noutput_msgs_++] = "No mods been installed.";
-    } else {
-      uint8_t idx(0);
-      for (auto e : mfiles_list_->mod_name_list) {
-        rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);
-        cmd_output_msgs_[idx++] = e;
-      }
+    std::size_t nes = mfiles_list_->mod_name_list.size();
+    if (!nes) {
+      generic_err_msg_output(ERROR_MSG_NOMODINS);
+      current_status_ = mhwimm_executor_status::ERROR;
+      return -1;
+    }
+
+    for (auto e : mfiles_list_->mod_name_list) {
+      rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);
+      cmd_output_msgs_[noutput_msgs_++] = e;
     }
 
     is_cmd_has_output_ = true;
