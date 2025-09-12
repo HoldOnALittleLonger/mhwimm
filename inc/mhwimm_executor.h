@@ -1,3 +1,7 @@
+/**
+ * Monster Hunter World Iceborne Mod Manager Executor
+ * This file contains definition of Executor.
+ */
 #ifndef _MHWIMM_EXECUTOR_H_
 #define _MHWIMM_EXECUTOR_H_
 
@@ -6,7 +10,6 @@
 
 #include <cstddef>
 #include <cstdint>
-
 #include <vector>
 #include <string>
 #include <list>
@@ -24,6 +27,7 @@ namespace mhwimm_executor_ns {
    * installed
    * config <key>=<value>
    * exit
+   * command / help
    */
   enum class mhwimm_executor_cmd {
     CD,
@@ -38,15 +42,22 @@ namespace mhwimm_executor_ns {
     NOP
   };
 
+  /* mhwimm_executor_tatus - Executor status */
   enum class mhwimm_executor_status {
     IDLE,
     WORKING,
     ERROR
   };
 
+  /**
+   * mhwimm_executor - executor of mhwimm which processes the commands
+   *                   from user input,and interactive with mhwimm
+   *                   database
+   */
   class mhwimm_executor final {
   public:
 
+    // constructor
     explicit mhwimm_executor(mhwimm_config_ns::config_t *conf)
       : conf_(conf), mfiles_list_(nullptr)
       {
@@ -60,6 +71,10 @@ namespace mhwimm_executor_ns {
         cmd_output_msgs_.resize(8);
       }
 
+    // no destructor,because the data members of this class
+    // without dynamically allocating.
+
+    // disabled copying,moving.
     mhwimm_executor(const mhwimm_executor &) =delete;
     mhwimm_executor &operator=(const mhwimm_executor &) =delete;
     mhwimm_executor(mhwimm_executor &&) =delete;
@@ -91,23 +106,15 @@ namespace mhwimm_executor_ns {
       return parameters_[0];
     }
 
-    void clearGetOutputHistory(void)
+    void clearGetOutputHistory(void) noexcept
     {
       output_info_index_ = 0;
       is_cmd_has_output_ = false;
     }
 
-    auto currentStatus(void) noexcept
-    {
-      return current_status_;
-    }
-
     auto currentCMD(void) noexcept { return current_cmd_; }
-    void setCMD(mhwimm_executor_cmd cmd) noexcept
-    {
-      current_cmd_ = cmd;
-    }
-
+    void setCMD(mhwimm_executor_cmd cmd) noexcept { current_cmd_ = cmd; }
+    auto currentStatus(void) noexcept { return current_status_; }
     void resetStatus(void) noexcept
     {
       current_status_ = mhwimm_executor_status::IDLE;
@@ -128,6 +135,7 @@ namespace mhwimm_executor_ns {
     int exit(void) noexcept;
     int commands(void) noexcept;
 
+    // syntax checkings
     bool syntaxChecking(std::size_t req_nparams)
     {
       return nparams_ == req_nparams;
@@ -135,9 +143,24 @@ namespace mhwimm_executor_ns {
 
     bool cmd_cd_syntaxChecking(void) { return syntaxChecking(1); }
     bool cmd_ls_syntaxChecking(void) { return true; }
-    bool cmd_install_syntaxChecking(void) { return syntaxChecking(2); }
+    bool cmd_install_syntaxChecking(void)
+    {
+      if (syntaxChecking(2)) {
+        std::string mod_dir(parameters_[1]);
+        if (mod_dir[0] == '/')
+          return false;
+        return true;
+      }
+      return false;
+    }
     bool cmd_uninstall_syntaxChecking(void) { return syntaxChecking(1); }
     bool cmd_installed_syntaxChecking(void) { return true; }
+
+    /**
+     * cmd_config_syntaxChecking - do syntax checking for command "config",
+     *                             and then splite parameters if no syntax
+     *                             error detected
+     */
     bool cmd_config_syntaxChecking(void) {
       // first,must have "key = value" pair
       if (!syntaxChecking(1))
@@ -184,13 +207,13 @@ namespace mhwimm_executor_ns {
     // we need two external pointers
     // the first is : pointer to config structure
     // the second is : pointer to mod file list structure
-
     mhwimm_config_ns::config_t *conf_;
     mhwimm_sync_mechanism_ns::mod_files_list *mfiles_list_;
 
     mhwimm_executor_cmd current_cmd_;
     mhwimm_executor_status current_status_;
 
+    // resize vector if necessary
     template<typename _VecType>
     void rs_vec_if_necessary(_VecType &vec, unsigned int nstored)
     {

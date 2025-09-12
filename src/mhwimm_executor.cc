@@ -1,3 +1,6 @@
+/**
+ * Member Method Definitions of mhwimm_executor
+ */
 #include "mhwimm_executor.h"
 
 #include <cstring>
@@ -35,6 +38,7 @@ namespace mhwimm_executor_ns {
 #define ERROR_MSG_UNINSTALL "error: Failed to uninstall mod."
 #define ERROR_MSG_NOMODINS "error: No mod been installed."
 
+  /* calculate_key - do sum of characters in a string */
   static int32_t calculate_key(const char *cmd_str)
   {
     if (!cmd_str)
@@ -46,6 +50,10 @@ namespace mhwimm_executor_ns {
     return result;
   }
 
+  /**
+   * parseCMD - method to parse command from user input,and registers the
+   *            command,stores command parameters in internal data members
+   */
   int mhwimm_executor::parseCMD(const std::string &cmd_string) noexcept
   {
 
@@ -75,6 +83,7 @@ namespace mhwimm_executor_ns {
     memset(cmd_tmp_buf, 0, buf_length);
     memcpy(cmd_tmp_buf, cmd_string.c_str(), buf_length - 1);
 
+    // first strtok()
     const char *arg(strtok(cmd_tmp_buf, " "));
 
     bool parse_more(false);
@@ -115,6 +124,7 @@ namespace mhwimm_executor_ns {
     }
 
     if (parse_more) {
+      // parse the same string via strtok
       while ((arg = strtok(NULL, " "))) {
         parameters_[nparams_++] = arg;
       }
@@ -135,20 +145,21 @@ namespace mhwimm_executor_ns {
     return 0;
   }
 
+  /**
+   * executeCurrentCMD - execute current registered command,return
+   *                     exit code to caller
+   */
   int mhwimm_executor::executeCurrentCMD(void) noexcept
   {
-    if (current_status_ == mhwimm_executor_status::ERROR ||
-        current_status_ == mhwimm_executor_status::WORKING)
-      return -1;
-
 #ifdef DEBUG
-    std::cerr << "noutput_msgs_ = " << noutput_msgs_ << std::endl;
-    std::cerr << "nparams_ = " << nparams_ << std::endl;
+    std::cerr << "last noutput_msgs_ = " << noutput_msgs_ << std::endl;
+    std::cerr << "last nparams_ = " << nparams_ << std::endl;
 #endif
 
     current_status_ = mhwimm_executor_status::WORKING;
     noutput_msgs_ = 0;
 
+    // call the right command routine with syntax checking
     switch (current_cmd_) {
     case mhwimm_executor_cmd::CD:
       if (cmd_cd_syntaxChecking())
@@ -197,6 +208,7 @@ namespace mhwimm_executor_ns {
     return -1;
   }
 
+  /* cd - change current wokr directory */
   int mhwimm_executor::cd(void) noexcept
   {
     current_status_ = mhwimm_executor_status::WORKING;
@@ -209,6 +221,7 @@ namespace mhwimm_executor_ns {
     return 0;
   }
 
+  /* ls - list files under current work directory */
   int mhwimm_executor::ls(void) noexcept
   {
     current_status_ = mhwimm_executor_status::WORKING;
@@ -222,7 +235,6 @@ namespace mhwimm_executor_ns {
     }
 
     struct dirent *dentry(NULL);
-    noutput_msgs_ = 0;
 
 #ifdef DEBUG
     int ndentries(0);
@@ -248,6 +260,7 @@ namespace mhwimm_executor_ns {
     return 0;
   }
 
+  /* exit - exit application,raise signal to current process */
   int mhwimm_executor::exit(void) noexcept
   {
     // we does not use concurrent protecting at there,
@@ -259,11 +272,12 @@ namespace mhwimm_executor_ns {
     return 0;
   }
 
+  /* config - modify value of config option of config structure */
   int mhwimm_executor::config(void) noexcept
   {
 #define CONFIG_USERHOME 616
 #define CONFIG_MHWIROOT 633
-#define CONFIG_MHWIMMCROOT 854
+#define CONFIG_MHWIMMROOT 787
 
     current_status_ = mhwimm_executor_status::WORKING;
 
@@ -281,7 +295,7 @@ namespace mhwimm_executor_ns {
                                     mhwimm_config_ns::get_config_traits<
                                       mhwimm_config_ns::config_t>::skey_t>(val);
       break;
-    case CONFIG_MHWIMMCROOT:
+    case CONFIG_MHWIMMROOT:
       conf_->mhwimmroot = static_cast<typename
                                        mhwimm_config_ns::get_config_traits<
                                          mhwimm_config_ns::config_t>::skey_t>(val);
@@ -297,9 +311,14 @@ namespace mhwimm_executor_ns {
 
 #undef CONFIG_USERHOME
 #undef CONFIG_MHWIROOT
-#undef CONFIG_MHWIMMCROOT
+#undef CONFIG_MHWIMMROOT
   }
 
+  /**
+   * install - install mod to mhwi root,and build two lists
+   *           for stores directory paths and regular file paths,
+   *           these informations will be inserted into database
+   */
   int mhwimm_executor::install(void) noexcept
   {
     current_status_ = mhwimm_executor_status::WORKING;
@@ -309,7 +328,8 @@ namespace mhwimm_executor_ns {
 
     /**
      * lf_traverse_dir - local function used to traverse the directory and makeup mod file list
-     * @parent_dir:      parent directory
+     * @moddir:          name of the mod directory,relative path to current work directory
+     * @subpath:         path for next sub directory the mod to recursive traversing
      * return:           0 OR -1
      * # front-inserting
      */
@@ -450,6 +470,12 @@ namespace mhwimm_executor_ns {
     return - 1;
   }
 
+  /**
+   * uninstall - uninstall a mod,database should removes
+   *             the records of this mod if uninstalling
+   *             succeed
+   * return:     0 OR -1
+   */
   int mhwimm_executor::uninstall(void) noexcept
   {
     // uninstall [ mod name ]
@@ -536,11 +562,16 @@ namespace mhwimm_executor_ns {
     return 0;
   }
 
+  /**
+   * commands - tell user current supported commands
+   * return:    always _zero_
+   */
   int mhwimm_executor::commands(void) noexcept
   {
     constexpr const char *cd_description = "cd <path> - change current work directory";
     constexpr const char *ls_description = "ls - list files under current work direcotry";
-    constexpr const char *install_description = "install <mod name> <mod directory> - install mod @mode_name,its files are existed in @mod_direcotry";
+    constexpr const char *install_description = "install <mod name> <mod directory - relative path>"
+                                                " - install mod @mode_name,its files are existed in @mod_direcotry";
     constexpr const char *unintall_description = "unintall <mod name> - unintall mod @mod_name";
     constexpr const char *config_description = "config <key>=<value> - set config,implemented @userhome @mhwiroot, @mhwimmroot";
     constexpr const char *exit_description = "exit - exit application";

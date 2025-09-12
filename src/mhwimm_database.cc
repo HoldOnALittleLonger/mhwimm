@@ -1,3 +1,6 @@
+/**
+ * Member Method Definitions of mhwimm_db
+ */
 #include "mhwimm_database.h"
 
 #include <cstdint>
@@ -22,6 +25,7 @@
 namespace mhwimm_db_ns {
 
 
+  /* openDB - method to open a sqlite3 database */
   int mhwimm_db::openDB(void)
   {
     current_status_ = DB_STATUS::DB_WORKING;
@@ -40,6 +44,7 @@ namespace mhwimm_db_ns {
     return ret;
   }
 
+  /* closeDB - method to close a sqlite3 database opened by openDB() previously */
   int mhwimm_db::closeDB(void)
   {
     current_status_ = DB_STATUS::DB_WORKING;
@@ -53,6 +58,7 @@ namespace mhwimm_db_ns {
     return ret;
   }
 
+  /* tryCreateTable - method to create table */
   int mhwimm_db::tryCreateTable(void)
   {
     current_status_ = DB_STATUS::DB_WORKING;
@@ -88,6 +94,15 @@ namespace mhwimm_db_ns {
     return ret;
   }
 
+  /**
+   * executeDBOPeration - method to execute current registered database
+   *                      operation
+   * return:              0 OR -1
+   * # this routine will construct SQL statement for current registered
+   *   operation
+   * # for SQL_ASK,subsequent executeDBOperation() will works on the
+   *   same database transaction,until it completed or detected an error
+   */
   int mhwimm_db::executeDBOperation(void)
   {
     current_status_ = DB_STATUS::DB_WORKING;
@@ -112,10 +127,9 @@ namespace mhwimm_db_ns {
 #endif
 
     /**
-     * construct_stmt_with_where_cond - construct SQL statement with additional logical LINK symbol
+     * construct_stmt_with_where_cond - construct SQL statement with additional logical operator
      * @sqlstmt:                        SQL statement in C++-style string
-     * @LINK:                           SQL logical LINK symbol,it could be
-     *                                    AND, OR
+     * @LINKER:                         SQL logical operator,it could be AND, OR
      */
     auto construct_stmt_with_where_cond = [&](std::string &sqlstmt, const char *LINKER)
       ->void {
@@ -133,21 +147,18 @@ namespace mhwimm_db_ns {
         sqlstmt += " mod_name = $key1 ";
         need_linker = true;
       }
-
       if (record_buf_.is_file_path_set) {
         if (need_linker)
           sqlstmt += LINKER;
         sqlstmt += " file_path = $key2 ";
         need_linker = true;
       }
-
       if (record_buf_.is_install_date_set) {
         if (need_linker)
           sqlstmt += LINKER;
         sqlstmt += " install_date = $key3 ";
       }
 
-      sqlstmt += ";";
     };
 
     auto construct_select = [&](const char *LINKER) -> void {
@@ -162,7 +173,8 @@ namespace mhwimm_db_ns {
       INSERT += " (mod_name, file_path, install_date) VALUES ($key1, $key2, $key3);";
     };
 
-    if (more_row_indicator_)
+    /* if we are still in SQL_ASK,then continue from last operation */
+    if (more_rows_indicator_)
       goto more_row;
 
     switch (current_op_) {
@@ -273,7 +285,7 @@ namespace mhwimm_db_ns {
 #endif
       goto finalize_out;
     }
-
+    
     // now we can evaluate sql statement.
     switch (current_op_) {
     case SQL_OP::SQL_ADD:
@@ -303,21 +315,18 @@ namespace mhwimm_db_ns {
     return ret;
 
   more_row:
-    more_row_indicator_ = false;
+    more_rows_indicator_ = false;
     ret = sqlite3_step(sql_stmt_);
     if (ret == SQLITE_ROW) {
-      more_row_indicator_ = true;
+      more_rows_indicator_ = true;
       record_buf_.mod_name = reinterpret_cast<const char *>(sqlite3_column_text(sql_stmt_, 0));
       record_buf_.file_path = reinterpret_cast<const char *>(sqlite3_column_text(sql_stmt_, 1));
       record_buf_.install_date = reinterpret_cast<const char *>(sqlite3_column_text(sql_stmt_, 2));
 #ifdef DEBUG
       std::cerr << "SELECT returned - "
-                << record_buf_.mod_name
-                << "\n"
-                << record_buf_.file_path
-                << "\n"
-                << record_buf_.install_date
-                << std::endl;
+                << record_buf_.mod_name << " "
+                << record_buf_.file_path << " "
+                << record_buf_.install_date << std::endl;
 #endif
       return 0;
     } else if (ret == SQLITE_DONE) {

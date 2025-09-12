@@ -1,3 +1,6 @@
+/**
+ * Header of UI Thread Worker
+ */
 #ifndef _MHWIMM_UI_THREAD_H_
 #define _MHWIMM_UI_THREAD_H_
 
@@ -7,8 +10,8 @@
 /**
  * mhwimm_ui_thread_worker - C++ multithread worker for take charge of 
  *                           UI
- * @mmui:                    an object is type of mhwimm_ui
- * @ctrlmsg:                 ui executor msg exchange entity
+ * @mmui:                    lvalue reference to an object is type of mhwimm_ui
+ * @ctrlmsg:                 lvalue reference to ui executor msg exchange entity
  */
 void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui,
                              mhwimm_sync_mechanism_ns::uiexemsgexchg &ctrlmsg);

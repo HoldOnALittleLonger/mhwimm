@@ -1,3 +1,27 @@
+/**
+ * Main
+ * The jobs that main() have to do :
+ *   1> initializes some resources will used by
+ *      UI,Executor,Database
+ *   2> Get environment variable HOME to locate
+ *      current user's home
+ *   3> Checks whether need to initialize this
+ *      application.if have to,then ask user
+ *      for some paths about this application
+ *      and mhwi;if have not to,then attempt
+ *      read config from config file
+ *   4> Setup signal actions
+ *   5> intialize global variable @pmhwiroot
+ *      which will be used by Database
+ *   6> initialize Database Register Helpers
+ *   7> start thread works
+ *   8> sigwait() async signals come
+ *   9> send signal to threads for interrupt
+ *      pending system call,and wait them
+ *      join to main thread
+ *  10> write config options to config file
+ *      and exit
+ */
 #include "mhwimm_ui.h"
 #include "mhwimm_executor.h"
 #include "mhwimm_database.h"
@@ -82,7 +106,7 @@ int main(void)
 
   if (mhwimm_need_initialization(config_file_path)) {
     if (!ask_user_to_setup_mhwimmroot(conf)) {
-      std::cerr << "Failed to setup mhwimm." << std::endl;
+      std::cerr << "main(): error: Failed to setup mhwimm." << std::endl;
       std::cerr << "config path: " << config_file_path << std::endl
                 << "userhome: " << conf.userhome << std::endl
                 << "mhwiroot: " << conf.mhwiroot << std::endl
@@ -92,7 +116,7 @@ int main(void)
     
     struct stat ts = {0};
     if (stat(conf.userhome.c_str(), &ts) < 0) {
-      std::cerr << "Failed to retrieve file stat of $HOME." << std::endl;
+      std::cerr << "main(): error: Failed to retrieve file stat of $HOME." << std::endl;
       return -1;
     }
 
@@ -101,7 +125,7 @@ int main(void)
     if (mkdir(conf.mhwimmroot.c_str(), ts.st_mode) < 0) {
       /* ignore error when directory been existed. */
       if (errno != EEXIST) {
-        std::cerr << "Failed to create directory " << conf.mhwimmroot << std::endl;
+        std::cerr << "main(): error: Failed to create directory " << conf.mhwimmroot << std::endl;
         return -1;
       }
     }
@@ -109,19 +133,19 @@ int main(void)
     /* create config file */
     if (!mhwimm_config_ns::makeup_config_file<mhwimm_config_ns::config_t>(&conf,
                                                         config_file_path.c_str())) {
-      std::cerr << "Failed to makeup config file." << std::endl;
+      std::cerr << "main(): error: Failed to makeup config file." << std::endl;
       return -1;
     }
   }
   else if (!read_from_config<mhwimm_config_ns::config_t>(&conf, config_file_path.c_str())) {
-    std::cerr << "Failed to read from config file." << std::endl;
+    std::cerr << "main(): error: Failed to read from config file." << std::endl;
     return -1;
   }
 
   std::string db_path = conf.mhwimmroot;
 
   /* install signal handlers */
-  struct sigaction siga;
+  struct sigaction siga = {0};
   siga.sa_handler = SIGINT_handler;
   siga.sa_flags = 0;
 
@@ -129,7 +153,7 @@ int main(void)
   sigaddset(&siga.sa_mask, SIGTERM);
 
   if (sigaction(SIGINT, &siga, NULL) < 0) {
-    std::cerr << "Failed to setup SIGINT handler." << std::endl;
+    std::cerr << "main(): error: Failed to setup SIGINT handler." << std::endl;
     return -1;
   }
 
@@ -138,7 +162,7 @@ int main(void)
   sigaddset(&siga.sa_mask, SIGINT);
 
   if (sigaction(SIGTERM, &siga, NULL) < 0) {
-    std::cerr << "Failed to setup SIGTERM handler." << std::endl;
+    std::cerr << "main(): error: Failed to setup SIGTERM handler." << std::endl;
   }
 
   sigemptyset(&siga.sa_mask);
@@ -166,7 +190,7 @@ int main(void)
   int sig = 0;
 
   if (pthread_sigmask(SIG_BLOCK, &siga.sa_mask, NULL) < 0) {
-    std::cerr << "Failed to setup thread signal mask." <<std::endl;
+    std::cerr << "main(): error: Failed to setup thread signal mask." <<std::endl;
     program_exit = 1;
   }
 
@@ -178,7 +202,7 @@ int main(void)
 
   if (sigwait(&siga.sa_mask, &sig) < 0) {
     program_exit = 1;
-    std::cerr << "Error encountered when main thread doing signal wait." << std::endl;
+    std::cerr << "main(): error: Error detected when main thread doing signal wait." << std::endl;
   }
 
   if (sig != SIGINT && sig != SIGTERM) {
@@ -193,8 +217,9 @@ int main(void)
   exe_thread.join();
   ui_thread.join();
 
-  std::cerr << "Ready to makeup config file." << std::endl;
+  std::cout << "main(): Ready to makeup config file." << std::endl;
   mhwimm_config_ns::makeup_config_file<mhwimm_config_ns::config_t>(&conf, config_file_path.c_str());
+  std::cout << "main(): Completed." << std::endl;
 
   return 0;
 }
@@ -231,7 +256,7 @@ static bool ask_user_to_setup_mhwimmroot(mhwimm_config_ns::config_t &conf)
   std::size_t path_max = pathconf("/", _PC_PATH_MAX);
   std::unique_ptr<char> buf(new char[path_max]);
   if (!buf) {
-    std::cerr << "Failed to allocate memory for get mhwiroot." << std::endl;
+    std::cerr << "main(): error: Failed to allocate memory for get mhwiroot." << std::endl;
     return false;
   }
 
@@ -239,18 +264,18 @@ static bool ask_user_to_setup_mhwimmroot(mhwimm_config_ns::config_t &conf)
   std::cout.flush();
   std::cin.getline(buf.get(), path_max);
   if (std::cin.fail()) {
-    std::cerr << "error detected when reading user input." << std::endl;
+    std::cerr << "main(): error: error detected when reading user input." << std::endl;
     return false;
   }
 
   struct stat ts = {0};
   if (stat(buf.get(), &ts) < 0) {
-    std::cerr << "Can not verify the path." << std::endl;
+    std::cerr << "main(): error: Can not verify the path." << std::endl;
     return false;
   }
 
   if (!S_ISDIR(ts.st_mode)) {
-    std::cerr << "Bad path." << std::endl;
+    std::cerr << "main(): error: Bad path." << std::endl;
     return false;
   }
 

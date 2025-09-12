@@ -1,3 +1,6 @@
+/**
+ * Database Thread Worker
+ */
 #include "mhwimm_database_thread.h"
 #include "mhwimm_database.h"
 #include "mhwimm_sync_mechanism.h"
@@ -19,11 +22,13 @@ static std::time_t ins_date(0);
 bool is_db_op_succeed(false);
 
 /* used to indicates what field the Executor needs. */
-mhwimm_db_ns::interest_db_field_t interest_field(mhwimm_db_ns::INTEREST_FIELD::NO_INTEREST);
+mhwimm_sync_mechanism_ns::interest_db_field_t
+interest_field(mhwimm_sync_mechanism_ns::INTEREST_FIELD::NO_INTEREST);
 
 /* reg helper will setup this pointer variable */
 mhwimm_sync_mechanism_ns::mod_files_list *mfl_for_db(nullptr);
 
+/* path of mhwi root */
 extern typename mhwimm_config_ns::get_config_traits<mhwimm_config_ns::config_t>::skey_t *
 pmhwiroot_path;
 
@@ -68,6 +73,7 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     }
   }
 
+  /* do_DB_ask - do SQL_ASK on database */
   auto do_DB_ask = [&, interest_field, mfl_for_db](void) -> void {
     std::unique_lock<decltype(mfl_for_db->lock)> mfl_lock(mfl_for_db->lock);
     int ret(0);
@@ -80,14 +86,14 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     ret = db.executeDBOperation();
 
     if (!ret && db.getCurrentStatus() == mhwimm_db_ns::DB_STATUS::DB_WORKING) {
-      if (interest_field == mhwimm_db_ns::INTEREST_FIELD::INTEREST_NAME) {
+      if (interest_field == mhwimm_sync_mechanism_ns::INTEREST_FIELD::INTEREST_NAME) {
         std::string mod_name;
         ret = db.getFieldValue(name_idx, mod_name);
         if (ret < 0)
           goto err_getField;
-        mfl_for_db->regular_file_list.insert(mfl_for_db->regular_file_list.begin(), mod_name);
+        mfl_for_db->mod_name_list.insert(mfl_for_db->mod_name_list.begin(), mod_name);
         goto repeat_get;
-      } else if (interest_field == mhwimm_db_ns::INTEREST_FIELD::INTEREST_PATH) {
+      } else if (interest_field == mhwimm_sync_mechanism_ns::INTEREST_FIELD::INTEREST_PATH) {
         assert(pmhwiroot_path != nullptr);
         std::string file_path;
         std::string stat_file_path(*pmhwiroot_path);
@@ -102,7 +108,6 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
 #ifdef DEBUG
         std::cerr << "db thread: SQL_ASK - stat path - " << stat_file_path << std::endl;
 #endif
-
         ret = stat(stat_file_path.c_str(), &the_stat);
         if (ret < 0) {
           if (errno == ENOENT) {
@@ -138,19 +143,29 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
      * no more result can be got,method executeDBOperation() returned _zero_,
      * and in this case,db status must be DB_IDLE.
      */
-
-    if (interest_field == mhwimm_db_ns::INTEREST_FIELD::INTEREST_NAME) {
+    if (interest_field == mhwimm_sync_mechanism_ns::INTEREST_FIELD::INTEREST_NAME) {
       // make mod name unique.
       // because for each fiel,DB always construct one record and insert
       // it.for the mod have more files,then there are more records,
       // and each record contains the mod name.
-
-      std::string last_placed{"BUG"};
-      for (auto e : mfl_for_db->regular_file_list) {
-        if (last_placed != e) {
-          last_placed = e;
-          mfl_for_db->mod_name_list.insert(mfl_for_db->mod_name_list.begin(), last_placed);
+      if (mfl_for_db->mod_name_list.size() != 0) {
+        auto iter_current_pos(mfl_for_db->mod_name_list.begin());
+        auto iter_next_pos(mfl_for_db->mod_name_list.begin());
+        ++iter_next_pos;
+        for (; iter_next_pos != mfl_for_db->mod_name_list.end();) {
+          if (*iter_current_pos == *iter_next_pos) {
+            mfl_for_db->mod_name_list.erase(iter_next_pos);
+            continue;
+          }
+          iter_current_pos = iter_next_pos;
+          ++iter_next_pos;
         }
+
+#ifdef DEBUG
+        std::cerr << "DEBUG do_DB_ask() - mod name list :" << std::endl;
+        for (auto i : mfl_for_db->mod_name_list)
+          std::cerr << i << std::endl;
+#endif
       }
     }
 
@@ -172,10 +187,10 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     
     /* because regDBop been specified,we have retrieve it */
     mhwimm_db_ns::db_table_record dtr = {
-      .is_mod_name_set = 1,
       .mod_name = db.currentSelectedModName(),
-      .is_install_date_set = 1,
+      .is_mod_name_set = 1,
       .install_date = date_rec,
+      .is_install_date_set = 1,
     };
 
     std::unique_lock<decltype(mfl_for_db->lock)> mfl_lock(mfl_for_db->lock);

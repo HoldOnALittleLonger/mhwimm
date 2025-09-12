@@ -1,3 +1,7 @@
+/**
+ * Monster Hunter World Iceborne Mod Manager User Interface
+ * This file contains UI definition.
+ */
 #ifndef _MHWIMM_UI_H_
 #define _MHWIMM_UI_H_
 
@@ -7,15 +11,23 @@
 
 namespace mhwimm_ui_ns {
 
+  /**
+   * mhwimm_ui - UI of mhwimm,wait user input,pass command to
+   *             Executor,retrieve output from Executor and
+   *             show the messages to user
+   */
   class mhwimm_ui final {
   public:
-    mhwimm_ui() :
-      local_msg_buffer_("nil"),
-      prompt_msg_("mhwimm: "),
-      startup_msg_("Monster Hunter World:Iceborne Mod Manager cmd tool"),
-      space_indent_(8)
-        {}
+    mhwimm_ui()
+      : local_msg_buffer_("nil"),
+        prompt_msg_("mhwimm: "),
+        startup_msg_("Monster Hunter World:Iceborne Mod Manager cmd tool"),
+        space_indent_(8)
+    {}
 
+    // no destructor because this class has not dynamically allocating.
+
+    // disabled copying,moving.
     mhwimm_ui(const mhwimm_ui &) =delete;
     mhwimm_ui(mhwimm_ui &&) =delete;
     mhwimm_ui &operator=(const mhwimm_ui &) =delete;
@@ -55,7 +67,7 @@ namespace mhwimm_ui_ns {
     ssize_t readFromUser(void);
 
     /**
-     * sendCMDTo - send command readed from user to the destination
+     * sendCMDTo - send command input from user to the destination
      * @des:       where to place
      */
     void sendCMDTo(std::string &des)

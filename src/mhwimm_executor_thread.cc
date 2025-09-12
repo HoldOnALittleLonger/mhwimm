@@ -1,3 +1,6 @@
+/**
+ * Executor Thread Worker
+ */
 #include "mhwimm_executor_thread.h"
 #include "mhwimm_sync_mechanism.h"
 
@@ -7,7 +10,6 @@
 #endif
 
 #include <cstddef>
-#include <assert.h>
 
 using namespace mhwimm_executor_ns;
 
@@ -15,11 +17,14 @@ using namespace mhwimm_executor_ns;
  * mhwimm_executor_thread_worker - thread worker for Executor
  * @exe:                           Executor handler
  * @ctrlmsg:                       communication between Executor and UI
+ * @mfiles_list:                   structure holds some containers used
+ *                                 to interactive with database
  * # the works that this routine will processes :
- *     1> wait user input on @ctrlmsg
+ *     1> wait user input in @ctrlmsg
  *     2> parse command input
  *     3> if cmd is INSTALL,then send DB request after INSTALL accomplished
- *     4> if cmd is UNINSTALL,then send DB request for retrive mod records
+ *     4> if cmd is UNINSTALL / INSTALLED,then send DB request for retrieve
+ *        mod records before process the real operation
  *     5> send command output msg to UI via @ctrlmsg
  */
 void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
@@ -48,10 +53,10 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
     NOP_DELAY();
     // try to lock ctrl msg object for get user input.
     std::unique_lock<decltype(ctrlmsg.lock)> exeui_lock(ctrlmsg.lock);
-    
-    // if the status is not UI_CMD when entered Executor thread,then
-    // there must be a fatal error was encountered.
-    assert(ctrlmsg.status == UIEXE_STATUS::UI_CMD);
+
+    // wait UI response
+    if (ctrlmsg.status != UIEXE_STATUS::UI_CMD)
+      continue;
 
     int ret = exe.parseCMD(ctrlmsg.io_buf);
     /* we failed to parse command input */
@@ -70,7 +75,7 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
       NOP_DELAY();
       exedb_lock.lock();
       if (!is_db_op_succeed) {
-        ctrlmsg.io_buf = std::string{"error: Failed to retrieve installed mods."};
+        ctrlmsg.io_buf = std::string{"executor thread error: Failed to retrieve installed mods."};
         ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
         ctrlmsg.new_msg = 1;
         continue;
@@ -84,7 +89,7 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
         NOP_DELAY();
         exedb_lock.lock();
         if (!is_db_op_succeed) {
-          ctrlmsg.io_buf = std::string{"error: Failed to retrive mod info from DB."};
+          ctrlmsg.io_buf = std::string{"executor thread error: Failed to retrieve mod info from DB."};
           ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
           ctrlmsg.new_msg = 1;
           continue;
@@ -114,7 +119,7 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
         /* if we failed to add new records to BD,we must undo INSTALL. */
         exe.setCMD(mhwimm_executor_ns::mhwimm_executor_cmd::UNINSTALL);
         exe.executeCurrentCMD();
-        ctrlmsg.io_buf = std::string{"error: Failed to add records to DB."};
+        ctrlmsg.io_buf = std::string{"executor error: Failed to add records to DB."};
         ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
         ctrlmsg.new_msg = 1;
         continue;
@@ -126,7 +131,7 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
       NOP_DELAY();
       exedb_lock.lock();
       if (!is_db_op_succeed) {
-        ctrlmsg.io_buf = std::string{"error: Failed to remove records from DB."};
+        ctrlmsg.io_buf = std::string{"executor error: Failed to remove records from DB."};
         ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
         ctrlmsg.new_msg = 1;
         continue;

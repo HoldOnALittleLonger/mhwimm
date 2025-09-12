@@ -1,11 +1,12 @@
+/**
+ * Database Register Helpers
+ */
 #include "mhwimm_sync_mechanism.h"
 #include "mhwimm_database.h"
 
 #include <assert.h>
 
 static mhwimm_db_ns::mhwimm_db *db_impl(nullptr);
-extern mhwimm_sync_mechanism_ns::mod_files_list *mfl_for_db;
-extern mhwimm_db_ns::interest_db_field_t interest_field;
 
 void init_regDB_routines(mhwimm_db_ns::mhwimm_db *db)
 {
@@ -17,8 +18,8 @@ void regDBop_getAllInstalled_Modsname(mhwimm_sync_mechanism_ns::mod_files_list *
 {
   assert(db_impl != nullptr);
   mfl_for_db = mfl;
-  interest_field = mhwimm_db_ns::INTEREST_FIELD::INTEREST_NAME;
-  mhwimm_db_ns::db_table_record dtr = {0};
+  interest_field = mhwimm_sync_mechanism_ns::INTEREST_FIELD::INTEREST_NAME;
+  mhwimm_db_ns::db_table_record dtr = NULL_dtr;
   db_impl->registerDBOperation(mhwimm_db_ns::SQL_OP::SQL_ASK, dtr);
 
 }
@@ -29,10 +30,10 @@ void regDBop_getInstalled_Modinfo(const std::string &modname,
 {
   assert(db_impl != nullptr);
   mfl_for_db = mfl;
-  interest_field = mhwimm_db_ns::INTEREST_FIELD::INTEREST_PATH;
+  interest_field = mhwimm_sync_mechanism_ns::INTEREST_FIELD::INTEREST_PATH;
   mhwimm_db_ns::db_table_record dtr = {
-    .is_mod_name_set = 1,
     .mod_name = modname, // as filter
+    .is_mod_name_set = 1,
   };
   db_impl->registerDBOperation(mhwimm_db_ns::SQL_OP::SQL_ASK, dtr);
 }
@@ -46,8 +47,8 @@ void regDBop_add_mod_info(const std::string &modname,
   assert(db_impl != nullptr);
   mfl_for_db = mfl;
   mhwimm_db_ns::db_table_record dtr = {
-    .is_mod_name_set = 1,
     .mod_name = modname,
+    .is_mod_name_set = 1,
   };
   db_impl->registerDBOperation(mhwimm_db_ns::SQL_OP::SQL_ADD, dtr);
 }
@@ -58,8 +59,8 @@ void regDBop_add_mod_info(const std::string &modname,
 void regDBop_remove_mod_info(const std::string &modname)
 {
   mhwimm_db_ns::db_table_record dtr = {
-    .is_mod_name_set = 1,
     .mod_name = modname, // as filter
+    .is_mod_name_set = 1,
   };
   db_impl->registerDBOperation(mhwimm_db_ns::SQL_OP::SQL_DEL, dtr);
 }

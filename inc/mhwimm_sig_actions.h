@@ -1,3 +1,9 @@
+/**
+ * Signal Handlers.
+ * Catch :
+ *   SIGINT
+ *   SIGTERM
+ */
 #ifndef _MHWIMM_SIG_ACTIONS_H_
 #define _MHWIMM_SIG_ACTIONS_H_
 

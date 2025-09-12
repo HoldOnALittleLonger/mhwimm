@@ -1,3 +1,6 @@
+/**
+ * Synchronous Mechanisms Between UI,Executor,and Database
+ */
 #ifndef _MHWIMM_SYNC_MECHANISM_H_
 #define _MHWIMM_SYNC_MECHANISM_H_
 
@@ -10,22 +13,28 @@
 
 #include "mhwimm_database.h"
 
+// prevent the interval between lock and unlock too short
 #define NOP_DELAY() for (int i(10240); i > 0; --i)
 
 namespace mhwimm_sync_mechanism_ns {
 
-  /**
-   * uiexemsgexchg - structure used to represents the msg format between
-   *                 UI module and Executor module
-   * @status:        bit field
-   *                   3 => UI module request
-   *                   2 => Executor module has more msg to send
-   *                   1 => Executor module has just one msg to send
-   *                   0 => Executor module has no msg to send
-   * @io_buf:        message buffer
-   * @lock:          lock used to protext the object
-   */
+
+
+  /* UIEXE_STATUS - enumerators for uiexemsgexchg.status */
   enum class UIEXE_STATUS : uint8_t { EXE_NOMSG, EXE_ONEMSG, EXE_MOREMSG, UI_CMD };
+
+  /**
+   * uiexemsgexchg - structure used to represents the message exechanging
+   *                 between UI and Executor
+   * @status:        current status of UI or Executor,used to tell each
+   *                 other what is the current status and what is the type
+   *                 of this message
+   * @new_msg:       indicator for whether new message been produced or the
+   *                 recently produced message been retrieved
+   * @io_buf:        message buffer
+   * @lock:          lock used to protect the object,also used to make a
+   *                 sync between UI and Executor
+   */
   struct uiexemsgexchg {
     UIEXE_STATUS status;
     unsigned int new_msg:1;
@@ -47,6 +56,23 @@ namespace mhwimm_sync_mechanism_ns {
     std::mutex lock;
   };
 
+  /**
+   * INTEREST_FIELD - enumerate fields that user interest to
+   *                  get,these enumerators are used to establish
+   *                  communication between database thread worker
+   *                  and user
+   * @NO_INTEREST:    nothing want to know
+   * @INTEREST_NAME:  want mod_name field
+   * @INTEREST_PATH:  want file_path field
+   * @INTEREST_DATE:  want install_date field
+   */
+  enum INTEREST_FIELD : uint8_t {
+    NO_INTEREST = 0,
+    INTEREST_NAME = 1,
+    INTEREST_PATH,
+    INTEREST_DATE
+  };
+  using interest_db_field_t = uint8_t;
 }
 
 /* C99 standard */
@@ -60,6 +86,10 @@ extern std::mutex exedb_sync_mutex;
 
 /* is_db_op_succeed - indicate whether the last db operation is succeed */
 extern bool is_db_op_succeed;
+
+/* Database Register Helpers related */
+extern mhwimm_sync_mechanism_ns::interest_db_field_t interest_field;
+extern mhwimm_sync_mechanism_ns::mod_files_list *mfl_for_db;
 
 extern void regDBop_getAllInstalled_Modsname(typename mhwimm_sync_mechanism_ns::mod_files_list *mfl);
 extern void regDBop_getInstalled_Modinfo(const std::string &modname,

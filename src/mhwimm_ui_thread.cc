@@ -1,13 +1,16 @@
+/**
+ * UI Thread Worker
+ */
 #include "mhwimm_ui_thread.h"
 #include "mhwimm_sync_mechanism.h"
 
 using namespace mhwimm_sync_mechanism_ns;
 
 /**
- * mhwimm_ui_thread_worker - UI module control thread
- * @mmui:                    UI module core object handler
- * @ctrlmsg:                 message exchange structure between UI module and
- *                           CMD module
+ * mhwimm_ui_thread_worker - UI thread worker
+ * @mmui:                    UI object handler
+ * @ctrlmsg:                 message exchange structure between UI and
+ *                           Executor
  */
 void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlmsg)
 {
@@ -38,13 +41,8 @@ void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlm
     mmui.printPrompt();
 
     ssize_t ret(mmui.readFromUser());
-    if (ret <= 0) {
-      /**
-       * = 0 -> EOF or ENTER
-       * = -1 -> error encountered,or interrupted by signal
-       */
-      if (ret < 0) // print msg when detected error
-        mmui.printMessage(std::string{"Failed to read user input!"});
+    if (ret < 0) {
+      mmui.printMessage(std::string{"ui thread error: Failed to read user input!"});
       continue;
     }
 
@@ -55,17 +53,22 @@ void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlm
     uiexe_mutex_lock.unlock();
 
     /**
-     * CMD module handling user command
+     * Executor handles user command
      * UI module have to wait for it accomplished and get output
      */
-    for (; ;) {
+    for (std::size_t exenores(0); ;) {
       NOP_DELAY();
       uiexe_mutex_lock.lock();
 
-      // wait Executor respones
+      // wait Executor response
       // sometimes,lock the mutex again too fast will cause Executor
       // stay blocked and the command will have not parsed.
       if (ctrlmsg.status == UIEXE_STATUS::UI_CMD) {
+        ++exenores;
+        if (exenores > 16) {
+          mmui.newLine();
+          mmui.printMessage("ui thread error: Executor no response.");
+        }
         uiexe_mutex_lock.unlock();
         continue;
       }
