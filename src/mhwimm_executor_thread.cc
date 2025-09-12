@@ -146,6 +146,7 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
       if (!is_db_op_succeed) {
         /* if we failed to add new records to BD,we must undo INSTALL. */
         exe.setCMD(mhwimm_executor_ns::mhwimm_executor_cmd::UNINSTALL);
+        exe.bypassSyntaxChecking(1);
         exe.executeCurrentCMD();
         ctrlmsg.io_buf = std::string{"executor error: Failed to add records to DB."};
         ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;

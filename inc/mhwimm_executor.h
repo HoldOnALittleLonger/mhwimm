@@ -112,6 +112,11 @@ namespace mhwimm_executor_ns {
       is_cmd_has_output_ = false;
     }
 
+    void bypassSyntaxChecking(std::size_t new_nparams) noexcept
+    {
+      nparams_ = new_nparams;
+    }
+
     auto currentCMD(void) noexcept { return current_cmd_; }
     void setCMD(mhwimm_executor_cmd cmd) noexcept { current_cmd_ = cmd; }
     auto currentStatus(void) noexcept { return current_status_; }

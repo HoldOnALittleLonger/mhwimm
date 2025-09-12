@@ -231,8 +231,9 @@ namespace mhwimm_db_ns {
     const char *sqlCreateTable_ = 
       "CREATE TABLE mhwimm_db_table ("
       "mod_name CHAR NOT NULL,"
-      "file_path CHAR NOT NULL PRIMARY KEY,"
-      "install_date CHAR NOT NULL);";
+      "file_path CHAR NOT NULL,"
+      "install_date CHAR NOT NULL,"
+      "unused_id INT AUTO_INCREMENT PRIMARY KEY);";
   };
 
 }

@@ -507,34 +507,48 @@ namespace mhwimm_executor_ns {
      */
 
     auto mhwiroot(conf_->mhwiroot);
+
+#ifdef DEBUG
     noutput_msgs_++;
+#endif
 
     uint8_t rf_err(0);
     for (auto i : mfiles_list_->regular_file_list) {
       std::string filepath(mhwiroot + i);
       if (unlink(filepath.c_str()) < 0) {
         rf_err = 1;
+
+#ifdef DEBUG
         rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);
         // record the file's path which unlink failed on
         cmd_output_msgs_[noutput_msgs_++] = filepath;
+#endif
       }
     }
 
     uint8_t d_err(0);
     for (auto i : mfiles_list_->directory_list) {
       std::string dirpath(mhwiroot + i);
-      if (rmdir(dirpath.c_str()) < 0) {
-        d_err = 1;
-        rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);
-        cmd_output_msgs_[noutput_msgs_++] = dirpath;
-      }
+      errno = 0;
+      if (rmdir(dirpath.c_str()) < 0)
+        if (errno != ENOTEMPTY) {
+          d_err = 1;
+#ifdef DEBUG
+          rs_vec_if_necessary(cmd_output_msgs_, noutput_msgs_);
+          cmd_output_msgs_[noutput_msgs_++] = dirpath;
+#endif
+        }
     }
 
     if (rf_err || d_err) {
-      std::size_t nmsgs(noutput_msgs_);
       generic_err_msg_output(ERROR_MSG_UNINSTALL);
-      noutput_msgs_ = nmsgs;
       current_status_ = mhwimm_executor_status::ERROR;
+#ifdef DEBUG
+      std::cerr << "DEBUG printing for UNINSTALL - failed on files :\n";
+      for (auto e : cmd_output_msgs_) {
+        std::cerr << e << std::endl;
+      }
+#endif
       return -1;
     }
 
