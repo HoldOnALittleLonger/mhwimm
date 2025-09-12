@@ -56,7 +56,12 @@ void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlm
      * Executor handles user command
      * UI module have to wait for it accomplished and get output
      */
-    for (std::size_t exenores(0); ;) {
+
+#ifdef DEBUG
+    std::size_t exenores(0);
+#endif
+
+    for (; ;) {
       NOP_DELAY();
       uiexe_mutex_lock.lock();
 
@@ -64,11 +69,13 @@ void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlm
       // sometimes,lock the mutex again too fast will cause Executor
       // stay blocked and the command will have not parsed.
       if (ctrlmsg.status == UIEXE_STATUS::UI_CMD) {
+#ifdef DEBUG
         ++exenores;
         if (exenores > 16) {
           mmui.newLine();
           mmui.printMessage("ui thread error: Executor no response.");
         }
+#endif
         uiexe_mutex_lock.unlock();
         continue;
       }

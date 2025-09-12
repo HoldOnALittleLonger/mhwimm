@@ -37,6 +37,7 @@ namespace mhwimm_executor_ns {
 #define ERROR_MSG_LINK "error: Failed to install mod."
 #define ERROR_MSG_UNINSTALL "error: Failed to uninstall mod."
 #define ERROR_MSG_NOMODINS "error: No mod been installed."
+#define ERROR_MSG_MODCONFLICT "error: Mod conflict detected."
 
   /* calculate_key - do sum of characters in a string */
   static int32_t calculate_key(const char *cmd_str)
@@ -413,6 +414,16 @@ namespace mhwimm_executor_ns {
       goto err_exit;
     }
 
+    // conflicting checking
+    for (auto i : mfiles_list_->regular_file_list) {
+      std::string newpath(mhwiroot + i);
+      struct stat s = {0};
+      if (stat(newpath.c_str(), &s) == 0) {
+        generic_err_msg_output(ERROR_MSG_MODCONFLICT);
+        goto err_exit;
+      }
+    }
+
     // mkdirs
     for (auto i : mfiles_list_->directory_list) {
       std::string newpath(mhwiroot + i);
@@ -421,12 +432,13 @@ namespace mhwimm_executor_ns {
       errno = 0;
 #endif
       if (mkdir(newpath.c_str(), mhwiroot_stat.st_mode) < 0) {
+        if (errno != EEXIST) {
 #ifdef DEBUG
-        if (errno != EEXIST)
           std::cerr << strerror(errno) << std::endl;
 #endif
-        generic_err_msg_output(ERROR_MSG_MKDIR);
-        goto err_exit_remove_dir;
+          generic_err_msg_output(ERROR_MSG_MKDIR);
+          goto err_exit_remove_dir;
+        }
       }
     }
 

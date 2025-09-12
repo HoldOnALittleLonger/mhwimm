@@ -148,25 +148,27 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
       // because for each fiel,DB always construct one record and insert
       // it.for the mod have more files,then there are more records,
       // and each record contains the mod name.
-      if (mfl_for_db->mod_name_list.size() != 0) {
-        auto iter_current_pos(mfl_for_db->mod_name_list.begin());
-        auto iter_next_pos(mfl_for_db->mod_name_list.begin());
-        ++iter_next_pos;
-        for (; iter_next_pos != mfl_for_db->mod_name_list.end();) {
-          if (*iter_current_pos == *iter_next_pos) {
-            mfl_for_db->mod_name_list.erase(iter_next_pos);
-            continue;
-          }
-          iter_current_pos = iter_next_pos;
-          ++iter_next_pos;
-        }
 
+//      if (mfl_for_db->mod_name_list.size() != 0) {
+//        auto iter_current_pos(mfl_for_db->mod_name_list.begin());
+//        auto iter_next_pos(mfl_for_db->mod_name_list.begin());
+//        ++iter_next_pos;
+//        for (; iter_next_pos != mfl_for_db->mod_name_list.end();) {
+//          if (*iter_current_pos == *iter_next_pos) {
+//            iter_next_pos = mfl_for_db->mod_name_list.erase(iter_next_pos);
+//            continue;
+//          }
+//          iter_current_pos = iter_next_pos;
+//          ++iter_next_pos;
+//        }
+//      }
+
+      mfl_for_db->mod_name_list.unique();
 #ifdef DEBUG
         std::cerr << "DEBUG do_DB_ask() - mod name list :" << std::endl;
         for (auto i : mfl_for_db->mod_name_list)
           std::cerr << i << std::endl;
 #endif
-      }
     }
 
     return;

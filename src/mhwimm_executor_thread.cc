@@ -22,7 +22,10 @@ using namespace mhwimm_executor_ns;
  * # the works that this routine will processes :
  *     1> wait user input in @ctrlmsg
  *     2> parse command input
- *     3> if cmd is INSTALL,then send DB request after INSTALL accomplished
+ *     3> if cmd is INSTALL,then send DB request attempt to retrieve the
+ *        mod info for check whether this mod been installed;otherwise,
+ *        install the mode and send DB request to add new records after
+ *        INSTALL accomplished
  *     4> if cmd is UNINSTALL / INSTALLED,then send DB request for retrieve
  *        mod records before process the real operation
  *     5> send command output msg to UI via @ctrlmsg
@@ -69,6 +72,31 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
 
     // we must retrieve mod info before execute these two cmds.
     switch (exe.currentCMD()) {
+    case mhwimm_executor_cmd::INSTALL:
+      regDBop_getInstalled_Modinfo(exe.modNameForINSTALL(), &mfiles_list);
+      exedb_lock.unlock();
+      NOP_DELAY();
+      exedb_lock.lock();
+      if (!is_db_op_succeed) {
+        ctrlmsg.io_buf = std::string{"executor thread error: Failed to interactive"
+                                     " with DB for checking whether this mod been"
+                                     " installed."};
+        ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
+        ctrlmsg.new_msg = 1;
+        continue;
+      } else {
+        mfiles_list.lock.lock();
+        if (mfiles_list.directory_list.size() != 0 ||
+            mfiles_list.regular_file_list.size() != 0) {
+          ctrlmsg.io_buf = std::string{"executor thread error: This mod been installed."};
+          ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
+          ctrlmsg.new_msg = 1;
+          mfiles_list.lock.unlock();
+          continue;
+        }
+        mfiles_list.lock.unlock();
+      }
+      break;
     case mhwimm_executor_cmd::INSTALLED:
       regDBop_getAllInstalled_Modsname(&mfiles_list);
       exedb_lock.unlock();

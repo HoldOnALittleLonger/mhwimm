@@ -8,115 +8,76 @@ User Interface :
         mhwimmc: Monster Hunter World:Iceborne Mod Manager
         mhwimmc: cd [ path ]
         mhwimmc: ls
-        mhwimmc:
+
                 file
                 file
                 ...
-        mhwimmc: install [ mod name ] [ mod path | mod full path]
+        mhwimmc: install [ mod name ] [ mod's relative path ]
         mhwimmc: uninstall [ mod name ]
         mhwimmc: installed
-                <mod name> <mod path> <date>
+                <mod name>
                 ...
         mhwimmc: exit
+        ...
 
-Mod records :
-        sqlite table records.
-        [ MOD NAME ] [ MOD PATH ] [ DATE ]
-        <mod name>   <mod path>   <date>
+Mod record :
+        sqlite table record format :
+        [ mod_name ] [ file_path ] [ install_date ]
 
-Modules :
-        [ UI Module ]
-        [ Command Module ]
-        [ Database Module ]
+Module :
+        UI
+         > interactive with user
+        Executor
+         > process command from user and interactive with database
+        Database
+         > record mod install history
 
-    UI Module :
-            UI module handles console message printing and read user input,send the
-            input to Command Module
-
-    Command Module :
-            Command module receives the input from UI module,parses and process
-            the corresponding functions,send command output back to UI module
-            Command module also have to take charge of database control,if the command
-            install/uninstall a mod,the corresponding database record term must be
-            added or removed
-
-    Database Module :
-            Database module primaryly handles the database operations
-            if Command module need to modify database or retrieve some records,
-            it send a message to this module,and thus this module must responses
-            the request from Command module
-
-Commands :
-        cd => change current work directory
-                cd [ path ]
-        ls => list current directory
-                ls
-        install => install a mod
-                install [ mod name ] [ mod path ]
-                /* mod must not be compressed */
-        uninstall => uninstall a mod
-                uninstall [ mod name ]
-        installed => print all installed mods
-                installed
-        config => modify a config term
-                config [ key ]=[ value ]
-                @value: string value
-                config without key=value prints all config term
-                /* value unspecified config term will has the value "nil" */
-        exit => exit program
+Command :
+        cd <path>
+         => change current work directory
+        ls
+         => list current work directory
+        install <mod name without space> <mod directory - relative path - without space>
+         => install a mod
+        installed
+         => query what mods been installed
+        uninstall <mod name without space>
+         => uninstall a mod
+        config <key>=<value>
+         => set config option
+        exit
+         => exit application
+        commands
+         => print all commands'descriptions
+        help
+         => implemented as @commands
 
 Config :
-        USERHOME => the user's home who first initialized this application
-        MHWIROOT => root directory of Monster Hunter World:Iceborne
-        MHWIMMCROOT => root directory of mhwimmc
+        USERHOME => current user's home
+        MHWIROOT => path to install directory of the game
+        MHWIMMROOT => this application's config directory
 
-Config handling :
-        Command module have to handles program config
-        the command "config" is used to modify a config term
-
-Threaded :
-        three threads >
-                1> UI Module
-                2> Command Module
-                3> Database Module
-        ! all threads are non-detach
-
-        thread synchronization >
-                mutex :
-                  1> mutex @ucmutex for synchronization between UI and Command
-                  2> mutex @cdbmutex for synchronization between Command and Database
-                process memory space :
-                  1> UI input and Command msg buffer
-                     - 
-                       struct uc_msg_exchange {
-                               status_code
-                               io_buffer
-                       } ucmsgexchg
-                  2> Command and Database msg buffer
-                     - 
-                       struct table record {
-                               database op
-                               mod name
-                               mod install path
-                               install date
-                       } cdbmsgexchg
+Thread :
+        UI thread worker
+        Executor thread worker
+        Database thread worker
 
 Program exit :
         a global indicator named @program_exit is introduced for tell each threads
         should stop and exit
 
-Signals :
-        SIGINT => set @program_exit to TRUE
+Signal :
+        SIGINT  => set @program_exit to TRUE
         SIGTERM => set @program_exit to TRUE
 
 Development Environment :
         Language >
-                C and C++
+                C/C++
         Compiler >
-                gcc 10.3.0 and g++ 10.3.0
+                gcc/g++ 10.3.0
         GNU/libc >
                 glibc 2.31
-        Linux >
+        Kernel version >
                 linux 5.4.32
-        Sqlite >
-                sqlite 3
+        Database >
+                sqlite3
