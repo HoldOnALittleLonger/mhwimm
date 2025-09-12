@@ -4,6 +4,8 @@
 #include "mhwimm_ui_thread.h"
 #include "mhwimm_sync_mechanism.h"
 
+#include <assert.h>
+
 using namespace mhwimm_sync_mechanism_ns;
 
 /**
@@ -14,8 +16,6 @@ using namespace mhwimm_sync_mechanism_ns;
  */
 void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlmsg)
 {
-  std::unique_lock uiexe_mutex_lock(ctrlmsg.lock);
-
   mmui.printStartupMsg();
   for (; ;) {
 
@@ -46,56 +46,36 @@ void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlm
       continue;
     }
 
+    ctrlmsg.condv_sync.wait_cond_even();
+
     ctrlmsg.status = UIEXE_STATUS::UI_CMD;
-    ctrlmsg.new_msg = 0;
     mmui.sendCMDTo(ctrlmsg.io_buf);
 
-    uiexe_mutex_lock.unlock();
+    ctrlmsg.condv_sync.update_and_notify();
 
     /**
      * Executor handles user command
      * UI module have to wait for it accomplished and get output
      */
-
-#ifdef DEBUG
-    std::size_t exenores(0);
-#endif
-
-    for (; ;) {
-      NOP_DELAY();
-      uiexe_mutex_lock.lock();
-
-      // wait Executor response
-      // sometimes,lock the mutex again too fast will cause Executor
-      // stay blocked and the command will have not parsed.
-      if (ctrlmsg.status == UIEXE_STATUS::UI_CMD) {
-#ifdef DEBUG
-        ++exenores;
-        if (exenores > 16) {
-          mmui.newLine();
-          mmui.printMessage("ui thread error: Executor no response.");
-        }
-#endif
-        uiexe_mutex_lock.unlock();
-        continue;
+    for (bool is_break(false); is_break; is_break = !is_break) {
+      is_break = false;
+      ctrlmsg.condv_sync.wait_cond_even();
+      assert(ctrlmsg.status != UIEXE_STATUS::UI_CMD);
+      
+      if (ctrlmsg.status == UIEXE_STATUS::EXE_NOMSG) {
+        is_break = true;
+        goto cond_notify;
       }
 
-      if (ctrlmsg.status == UIEXE_STATUS::EXE_NOMSG)
-        break;
-
-      if (ctrlmsg.new_msg) {
-        mmui.newLine();
-        mmui.printIndentSpaces();
-        mmui.printMessage(ctrlmsg.io_buf);
-        ctrlmsg.new_msg = 0;
-      }
+      mmui.newLine();
+      mmui.printIndentSpaces();
+      mmui.printMessage(ctrlmsg.io_buf);
 
       if (ctrlmsg.status == UIEXE_STATUS::EXE_ONEMSG)
-        break;
+        is_break = true;
 
-      uiexe_mutex_lock.unlock(); // if more than one line info have to be printed,
-                                 // then we can release the lock and let Executor
-                                 // updates the msg buffer.
+    cond_notify:
+      ctrlmsg.condv_sync.update_and_notify();
     }
 
   }

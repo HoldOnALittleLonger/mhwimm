@@ -9,6 +9,7 @@
 
 #include <string>
 #include <mutex>
+#include <condition_variable>
 #include <list>
 
 #include "mhwimm_database.h"
@@ -16,9 +17,71 @@
 // prevent the interval between lock and unlock too short
 #define NOP_DELAY() for (int i(10240); i > 0; --i)
 
+/* C99 standard */
+typedef int atomic_t;
+
 namespace mhwimm_sync_mechanism_ns {
 
+  /**
+   * conditionv - condition variable synchronization
+   * data members:
+   *   @lock_data:  std::mutex object will hold by @lock
+   *   @lock:       std::unique_lock object used by
+   *                condition variable
+   *   @condv:      condition variable
+   *   @value:      sequence counter
+   * methods:
+   *   @conditionv:       constructor
+   *   @wait_cond_odd:    wait @value becomes odd
+   *   @wait_cond_even:   wait @value becomes even
+   *   @unlock:           unlock @lock
+   *   @update:           increase @value
+   *   @notify_one:       notify one instance which is waiting
+   *                      on @condv
+   *   @update_and_notify:    shortcut for unlock-update-notify
+   */
+  struct conditionv {
+    std::mutex lock_data;
+    std::unique_lock<std::mutex> lock;
+    std::condition_variable condv;
+    atomic_t value;
 
+    conditionv()
+      : lock_data(), lock(lock_data)
+    {
+      lock.unlock();
+      value = 0;
+    }
+
+    void wait_cond_odd(void)
+    {
+      this->lock.lock();
+      this->condv.wait(this->lock,
+                       [&, this](void) -> bool {
+                         return this->value % 2;
+                       });
+    }
+
+    void wait_cond_even(void)
+    {
+      this->lock.lock();
+      this->condv.wait(this->lock,
+                       [&, this](void) -> bool {
+                         return !(this->value % 2);
+                       });
+    }
+
+    void unlock(void) { lock.unlock(); }
+    void update(void) { ++value; }
+    void notify_one(void) { condv.notify_one(); }
+
+    void update_and_notify(void)
+    {
+      update();
+      unlock();
+      notify_one();
+    }
+  };
 
   /* UIEXE_STATUS - enumerators for uiexemsgexchg.status */
   enum class UIEXE_STATUS : uint8_t { EXE_NOMSG, EXE_ONEMSG, EXE_MOREMSG, UI_CMD };
@@ -37,9 +100,8 @@ namespace mhwimm_sync_mechanism_ns {
    */
   struct uiexemsgexchg {
     UIEXE_STATUS status;
-    unsigned int new_msg:1;
     std::string io_buf;
-    std::mutex lock;
+    struct conditionv condv_sync;
   };
 
   /**
@@ -75,14 +137,11 @@ namespace mhwimm_sync_mechanism_ns {
   using interest_db_field_t = uint8_t;
 }
 
-/* C99 standard */
-typedef int atomic_t;
-
 /* program_exit - value used to indicates whether the program should stop */
 extern atomic_t program_exit;
 
-/* exedb_sync_mutex - mutex used to make synchronization between Executor and DB */
-extern std::mutex exedb_sync_mutex;
+/* exedb_sync - synchronization between Executor and DB */
+extern mhwimm_sync_mechanism_ns::conditionv exedb_condv_sync;
 
 /* is_db_op_succeed - indicate whether the last db operation is succeed */
 extern bool is_db_op_succeed;
