@@ -1,5 +1,10 @@
 /**
  * Database Thread Worker
+ * The synchronizatioon between DB and Executor :
+ *   DB thread wait until the value becomes odd
+ *   Executor thread wait until the value becomes even
+ *   - In this way,can let Executor process at first,and
+ *     DB thread at the second.
  */
 #include "mhwimm_database_thread.h"
 #include "mhwimm_database.h"
@@ -265,14 +270,20 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
     }
   };
 
+  makeup_uniquelock_and_associate_condv(dbexe_lock, exedb_condv_sync);
+  dbexe_lock.unlock();
 
   for (; ;) {
-    if (program_exit)
-      break;
     db.resetDB();
 
-    NOP_DELAY();
-    std::unique_lock<decltype(exedb_sync_mutex)> exedb_lock(exedb_sync_mutex);
+    // It is my round now!
+    exedb_condv_sync.wait_cond_odd(dbexe_lock);
+
+    // DB is stopped as long as Executor no request.
+    // if Executor exit without any request,then
+    // we should not start a new DB transaction.
+    if (program_exit)
+      break;
 
     // DB operation will be registered by Executor via call to register helpers.
     switch (db.getCurrentOP()) {
@@ -284,12 +295,14 @@ void mhwimm_db_thread_worker(mhwimm_db_ns::mhwimm_db &db)
       break;
     case mhwimm_db_ns::SQL_OP::SQL_DEL:
       do_DB_del();
-      break;
-    default:
-      continue; /* un-supported command or SQL_NOP */
     }
     is_db_op_succeed = true;
     if (db.getCurrentStatus() == mhwimm_db_ns::DB_STATUS::DB_ERROR)
       is_db_op_succeed = false;
+
+    // Round finished.
+    exedb_condv_sync.update_and_notify(dbexe_lock);
   }
+
+  db.closeDB();
 }

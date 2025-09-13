@@ -6,7 +6,7 @@ vpath %.h  inc/
 
 CC := g++
 CXXFLAGS := -g -std=gnu++2a $(CCDEF)
-OBJECTS := main.o mhwimm_ui.o mhwimm_executor.o mhwimm_database.o mhwimm_ui_thread.o mhwimm_executor_thread.o mhwimm_database_thread.o mhwimm_db_reg_routines.o mhwimm_sig_actions.o sqlite3.o
+OBJECTS := main.o mhwimm_ui.o mhwimm_executor.o mhwimm_database.o mhwimm_ui_thread.o mhwimm_executor_thread.o mhwimm_database_thread.o mhwimm_db_reg_routines.o sqlite3.o
 LIBS := pthread dl
 LINKLIBS := ${addprefix -l, $(LIBS)}
 HEADERS_PATH := inc/

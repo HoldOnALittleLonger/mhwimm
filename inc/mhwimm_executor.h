@@ -14,10 +14,9 @@
 #include <string>
 #include <list>
 
-#include <assert.h>
+#include <cassert>
 
 namespace mhwimm_executor_ns {
-
   /**
    * mhwimm_executor_cmd - all supported cmds of executor
    * cd <pathname>
@@ -29,7 +28,7 @@ namespace mhwimm_executor_ns {
    * exit
    * command / help
    */
-  enum class mhwimm_executor_cmd {
+  enum class mhwimm_executor_cmd : uint8_t {
     CD,
     LS,
     INSTALL,
@@ -43,7 +42,7 @@ namespace mhwimm_executor_ns {
   };
 
   /* mhwimm_executor_tatus - Executor status */
-  enum class mhwimm_executor_status {
+  enum class mhwimm_executor_status : uint8_t {
     IDLE,
     WORKING,
     ERROR
@@ -96,13 +95,10 @@ namespace mhwimm_executor_ns {
       return -1;
     }
 
-    const auto &modNameForUNINSTALL(void) {
-      assert(current_cmd_ == mhwimm_executor_cmd::UNINSTALL);
-      return parameters_[0];
-    }
-
-    const auto &modNameForINSTALL(void) {
-      assert(current_cmd_ == mhwimm_executor_cmd::INSTALL);
+    const auto &getCurrentModName(void) const
+    {
+      assert(current_cmd_ == mhwimm_executor_cmd::INSTALL ||
+             current_cmd_ == mhwimm_executor_cmd::UNINSTALL);
       return parameters_[0];
     }
 
@@ -124,6 +120,7 @@ namespace mhwimm_executor_ns {
     {
       current_status_ = mhwimm_executor_status::IDLE;
       current_cmd_ = mhwimm_executor_cmd::NOP;
+      clearGetOutputHistory();
     }
 
     void setMFLImpl(mhwimm_sync_mechanism_ns::mod_files_list *mfl) { mfiles_list_ = mfl; }

@@ -19,7 +19,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#include <signal.h>
 
 #include <string.h>
 
@@ -35,6 +34,7 @@ namespace mhwimm_executor_ns {
 #define ERROR_MSG_UNKNOWNCONF "error: Unknown conf."
 #define ERROR_MSG_TRAVERSE_DIR "error: Failed to traverse directory."
 #define ERROR_MSG_LINK "error: Failed to install mod."
+#define ERROR_MSG_UNINSNMOD "error: Attempt to uninstall an not exist mod."
 #define ERROR_MSG_UNINSTALL "error: Failed to uninstall mod."
 #define ERROR_MSG_NOMODINS "error: No mod been installed."
 #define ERROR_MSG_MODCONFLICT "error: Mod conflict detected."
@@ -268,7 +268,7 @@ namespace mhwimm_executor_ns {
     // because of that the other control path will change this
     // indicator is the signal handler
     current_status_ = mhwimm_executor_status::WORKING;
-    kill(getpid(), SIGINT); // trigger SIGINT handler
+    program_exit = 1;
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
   }
@@ -495,6 +495,12 @@ namespace mhwimm_executor_ns {
     // mod files.
     // this work will hand over to worker thread.
     current_status_ = mhwimm_executor_status::WORKING;
+    if (!mfiles_list_->directory_list.size() &&
+        !mfiles_list_->regular_file_list.size()) {
+      generic_err_msg_output(ERROR_MSG_UNINSNMOD);
+      current_status_ = mhwimm_executor_status::ERROR;
+      return -1;
+    }
 
     // acquire list lock
     std::unique_lock<decltype(mfiles_list_->lock)> mfl_lock(mfiles_list_->lock);
@@ -552,7 +558,9 @@ namespace mhwimm_executor_ns {
       return -1;
     }
 
+#ifdef DEBUG
     noutput_msgs_ = 0;
+#endif
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
   }

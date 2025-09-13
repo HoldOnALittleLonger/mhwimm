@@ -1,5 +1,14 @@
 /**
  * Executor Thread Worker
+ * The synchronization between UI and Executor :
+ *   UI wait until the value becomes even
+ *   Executor wait until the value becomes odd
+ *   - UI process at first,Executor at second
+ * The synchronization between Executor and DB :
+ *   Executor wait until the value becomes even
+ *   DB wait until the value becomes odd
+ *   - Executor process at first,Executor at second
+ *     in one period.
  */
 #include "mhwimm_executor_thread.h"
 #include "mhwimm_sync_mechanism.h"
@@ -10,8 +19,7 @@
 #endif
 
 #include <cstddef>
-
-#include <assert.h>
+#include <cassert>
 
 using namespace mhwimm_executor_ns;
 
@@ -38,130 +46,158 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
 {
   using mhwimm_sync_mechanism_ns::UIEXE_STATUS;
 
+  makeup_uniquelock_and_associate_condv(exeui_lock, ctrlmsg.condv_sync);
+  exeui_lock.unlock();
+
+  makeup_uniquelock_and_associate_condv(exedb_lock, exedb_condv_sync);
+  exedb_lock.unlock();
+
   exe.setMFLImpl(&mfiles_list);
-
-  for (; ;) {
-    exe.resetStatus();
-
-    // clear containers.
+  for (; !program_exit;) {
+    // clear containers and status.
     mfiles_list.lock.lock();
     mfiles_list.regular_file_list.clear();
     mfiles_list.directory_list.clear();
     mfiles_list.mod_name_list.clear();
     mfiles_list.lock.unlock();
+    exe.resetStatus();
 
-    if (program_exit) // shall we stop and exit?
-      break;
-
-    // wait condition satisied.
-    ctrlmsg.condv_sync.wait_cond_odd();
+    // It is my round now !
+    ctrlmsg.condv_sync.wait_cond_odd(exeui_lock);
     assert(ctrlmsg.status == UIEXE_STATUS::UI_CMD);
-
     int ret = exe.parseCMD(ctrlmsg.io_buf);
-    /* we failed to parse command input */
-    if (ret || exe.currentStatus() == mhwimm_executor_status::ERROR) {
+    if (exe.currentStatus() == mhwimm_executor_status::ERROR) {
+      // Failed to parse user input
       (void)exe.getCMDOutput(ctrlmsg.io_buf);
       ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
-      ctrlmsg.condv_sync.update_and_notify();
+      ctrlmsg.condv_sync.update_and_notify(exeui_lock);
       continue;
     }
 
-    // we must retrieve mod info before execute these two cmds.
-    switch (exe.currentCMD()) {
-    case mhwimm_executor_cmd::INSTALL:
-      exedb_condv_sync.wait_cond_even();
-      regDBop_getInstalled_Modinfo(exe.modNameForINSTALL(), &mfiles_list);
-      exedb_condv_sync.update_and_notify();
-      exedb_condv_sync.wait_cond_even(); // condition satisfied,returned with
-      exedb_condv_sync.unlock();         // lock acquired,but we just unlock it
-                                         // at there without notification,that is
-                                         // because it is not the time to start
-                                         // next database transaction.
-      if (!is_db_op_succeed) {
-        ctrlmsg.io_buf = std::string{"executor thread error: Failed to interactive"
-                                     " with DB for checking whether this mod been"
-                                     " installed."};
-        ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
-        ctrlmsg.condv_sync.update_and_notify();
-        continue;
-      } else {
-        mfiles_list.lock.lock();
-        if (mfiles_list.directory_list.size() != 0 ||
-            mfiles_list.regular_file_list.size() != 0) {
+    /**
+     * Commands INSTALL, INSTALLED, UNINSTALL all of them
+     * must interactive with DB.
+     * INSTALL interactive to DB twice,one before
+     * do INSTALL,another one after done INSTALL.
+     * - (1)> is the mod been installed?
+     *   (2)> add the mod's info to database table
+     * INSTALLED interactive to DB once,before do INSTALLED.
+     * - (1)> retrieve the mod info from database
+     * UNINSTALL interactive to DB twice,one before
+     * do UNINSTALL,another one after done UNINSTALL.
+     * - (1)> retrieve the mod info from database
+     *   (2)> request database remove these records
+     *
+     * Synchronization :
+     *   we get the condition variable at first,then
+     *   request DB operation,and put the condition
+     *   variable let DB start its work.
+     *   after the operation accomplished,we get
+     *   the condition variable again,but do not
+     *   put it,just unlock as well.because we
+     *   do not want DB to start a new transaction,
+     *   we have not installed a new one.
+     *
+     * Before :
+     *   For INSTALL and UNINSTALL,we can combine them
+     *   together.
+     *   For INSTALLED,we need all installed mods' name.
+     * After :
+     *   For INSTALL,request DB add
+     *   For UNINSTALL,request DB remove
+     */
+
+    // Before
+    if (exe.currentCMD() == mhwimm_executor_cmd::INSTALL ||
+        exe.currentCMD() == mhwimm_executor_cmd::UNINSTALL ||
+        exe.currentCMD() == mhwimm_executor_cmd::INSTALLED) {
+      // It is my round now!
+      exedb_condv_sync.wait_cond_even(exedb_lock);
+
+      // register DB operation.
+      switch (exe.currentCMD()) {
+      case mhwimm_executor_cmd::INSTALL:
+      case mhwimm_executor_cmd::UNINSTALL:
+        regDBop_getInstalled_Modinfo(exe.getCurrentModName(), &mfiles_list);
+        break;
+      case mhwimm_executor_cmd::INSTALLED:
+        regDBop_getAllInstalled_Modsname(&mfiles_list);
+      }
+
+      // Round finished.
+      exedb_condv_sync.update_and_notify(exedb_lock);
+
+      exedb_condv_sync.wait_cond_even(exedb_lock);
+      exedb_condv_sync.unlock(exedb_lock); // DB stopped.
+
+      if (is_db_op_succeed) {
+        if (exe.currentCMD() == mhwimm_executor_cmd::INSTALL &&
+            (mfiles_list.regular_file_list.size() != 0 ||
+             mfiles_list.directory_list.size() != 0)) {
+          // this mod been installed.
           ctrlmsg.io_buf = std::string{"executor thread error: This mod been installed."};
           ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
-          ctrlmsg.condv_sync.update_and_notify();
+          ctrlmsg.condv_sync.update_and_notify(exeui_lock);
           continue;
         }
-        mfiles_list.lock.unlock();
-      }
-      break;
-    case mhwimm_executor_cmd::INSTALLED:
-      exedb_condv_sync.wait_cond_even();
-      regDBop_getAllInstalled_Modsname(&mfiles_list);
-      exedb_condv_sync.update_and_notify();
-      exedb_condv_sync.wait_cond_even();
-      exedb_condv_sync.unlock();
-      if (!is_db_op_succeed) {
-        ctrlmsg.io_buf = std::string{"executor thread error: Failed to retrieve installed mods."};
-        ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
-        ctrlmsg.condv_sync.update_and_notify();
-        continue;
-      }
-      break;
-    case mhwimm_executor_cmd::UNINSTALL:
-      exedb_condv_sync.wait_cond_even();
-      regDBop_getInstalled_Modinfo(exe.modNameForUNINSTALL(), &mfiles_list);
-      exedb_condv_sync.update_and_notify();
-      exedb_condv_sync.wait_cond_even();
-      exedb_condv_sync.unlock();
-      if (!is_db_op_succeed) {
-        ctrlmsg.io_buf = std::string{"executor thread error: Failed to retrieve mod info from DB."};
-        ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
-        ctrlmsg.condv_sync.update_and_notify();
-        continue;
-      }
+        // else UNINSTALL or no files or (UNINSTALL and no files)
+      } else
+        goto failed_db_interact_checking;
     }
 
+    // Executor process the parsed command.
     exe.executeCurrentCMD();
     if (exe.currentStatus() == mhwimm_executor_status::ERROR) {
       // encountered error,now have to send error msg to UI.
       exe.getCMDOutput(ctrlmsg.io_buf);
       ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
-      ctrlmsg.condv_sync.update_and_notify();
+      ctrlmsg.condv_sync.update_and_notify(exeui_lock);
       continue;
     }
 
-    // for INSTALL,we have to add new mod's info to DB.
-    // for UNINSTALL,we have to remove the mod's info from DB.
-    switch (exe.currentCMD()) {
-    case mhwimm_executor_cmd::INSTALL:
-      exedb_condv_sync.wait_cond_even();
-      regDBop_add_mod_info(exe.modNameForINSTALL(), &mfiles_list);
-      exedb_condv_sync.update_and_notify();
-      exedb_condv_sync.wait_cond_even();
-      exedb_condv_sync.unlock();
-      if (!is_db_op_succeed) {
-        /* if we failed to add new records to BD,we must undo INSTALL. */
-        exe.setCMD(mhwimm_executor_ns::mhwimm_executor_cmd::UNINSTALL);
-        exe.bypassSyntaxChecking(1);
-        exe.executeCurrentCMD();
-        ctrlmsg.io_buf = std::string{"executor error: Failed to add records to DB."};
-        ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
-        ctrlmsg.condv_sync.update_and_notify();
-        continue;
+    // After
+    if (exe.currentCMD() == mhwimm_executor_cmd::INSTALL ||
+        exe.currentCMD() == mhwimm_executor_cmd::UNINSTALL) {
+      // It is my round now!
+      exedb_condv_sync.wait_cond_even(exedb_lock);
+
+      switch (exe.currentCMD()) {
+      case mhwimm_executor_cmd::INSTALL:
+        regDBop_add_mod_info(exe.getCurrentModName(), &mfiles_list);
+        break;
+      case mhwimm_executor_cmd::UNINSTALL:
+        regDBop_remove_mod_info(exe.getCurrentModName());
       }
-      break;
-    case mhwimm_executor_cmd::UNINSTALL:
-      exedb_condv_sync.wait_cond_even();
-      regDBop_remove_mod_info(exe.modNameForUNINSTALL());
-      exedb_condv_sync.update_and_notify();
-      exedb_condv_sync.wait_cond_even();
-      exedb_condv_sync.unlock();
+      // Round finished.
+      exedb_condv_sync.update_and_notify(exedb_lock);
+
+      exedb_condv_sync.wait_cond_even(exedb_lock);
+      exedb_condv_sync.unlock(exedb_lock);
+
+    failed_db_interact_checking:
       if (!is_db_op_succeed) {
-        ctrlmsg.io_buf = std::string{"executor error: Failed to remove records from DB."};
+        if (exe.currentCMD() == mhwimm_executor_cmd::INSTALL) {
+          // we failed on add record for INSTALL,thus have to undo INSTALL.
+          exe.setCMD(mhwimm_executor_cmd::UNINSTALL);
+          exe.bypassSyntaxChecking(1);
+          if (exe.executeCurrentCMD() < 0) {
+            // undo INSTALL failed,
+            // stop application.
+            exe.setCMD(mhwimm_executor_cmd::EXIT);
+            exe.bypassSyntaxChecking(0);
+            exe.executeCurrentCMD();
+            ctrlmsg.io_buf = std::string{"executor thread error: "
+                                         "Failed to interactive with DB for INSTALL,"
+                                         "and failure undo INSTALL,application stopping!"};
+            ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
+            ctrlmsg.condv_sync.update_and_notify(exeui_lock);
+            continue;
+          }
+        }
+        ctrlmsg.io_buf = std::string{"executor thread error: Failed to interactive"
+                                     " with DB."};
         ctrlmsg.status = UIEXE_STATUS::EXE_ONEMSG;
-        ctrlmsg.condv_sync.update_and_notify();
+        ctrlmsg.condv_sync.update_and_notify(exeui_lock);
         continue;
       }
     }
@@ -170,14 +206,13 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
     std::size_t sget(0);
 #endif
 
-    // the last command accomplished without any error,now we can send
-    // cmd output to UI.
-    // upon there,we still holding @ctrlmsg.condv_sync
+    // From there,we send cmd output to UI.
+    // We still holding the condition variable,now.
     for (; ;) {
       ret = exe.getCMDOutput(ctrlmsg.io_buf);
       if (ret) {
         ctrlmsg.status = UIEXE_STATUS::EXE_NOMSG;
-        ctrlmsg.condv_sync.update_and_notify();
+        ctrlmsg.condv_sync.update_and_notify(exeui_lock);
         break; // break with release condv
       }
 
@@ -185,12 +220,14 @@ void mhwimm_executor_thread_worker(mhwimm_executor_ns::mhwimm_executor &exe,
       sget++;
 #endif
       ctrlmsg.status = UIEXE_STATUS::EXE_MOREMSG;
-      ctrlmsg.condv_sync.update_and_notify();
-      ctrlmsg.condv_sync.wait_cond_odd();
+      ctrlmsg.condv_sync.update_and_notify(exeui_lock);
+      ctrlmsg.condv_sync.wait_cond_odd(exeui_lock);
     }
 #ifdef DEBUG
     std::cerr << "\n Count succeed get command output msg : " << sget << std::endl;
 #endif
   }
 
+  exedb_condv_sync.wait_cond_even(exedb_lock);
+  exedb_condv_sync.update_and_notify(exedb_lock); // release to let DB executing.
 }

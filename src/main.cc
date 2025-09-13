@@ -10,7 +10,7 @@
  *      for some paths about this application
  *      and mhwi;if have not to,then attempt
  *      read config from config file
- *   4> Setup signal actions
+ *   4> Setup signal blocking.
  *   5> intialize global variable @pmhwiroot
  *      which will be used by Database
  *   6> initialize Database Register Helpers
@@ -31,12 +31,11 @@
 #include "mhwimm_database_thread.h"
 
 #include "mhwimm_sync_mechanism.h"
-#include "mhwimm_sig_actions.h"
 #include "mhwimm_config.h"
 
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <signal.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -53,15 +52,13 @@ constexpr const char *mhwimm_config_filename("mhwimm_config");
 constexpr const char *mhwimmroot_name("mhwimm");
 constexpr const char *mhwimm_db_name("mhwimm_db");
 
+atomic_t program_exit = 0;
+
+mhwimm_sync_mechanism_ns::conditionv exedb_condv_sync;
 mhwimm_sync_mechanism_ns::uiexemsgexchg uiexe_ctrl_msg = {
   .status = mhwimm_sync_mechanism_ns::UIEXE_STATUS::EXE_NOMSG,
 };
-
 mhwimm_sync_mechanism_ns::mod_files_list mfl;
-
-atomic_t program_exit = 0;
-
-std::mutex exedb_sync_mutex;
 
 const typename mhwimm_config_ns::get_config_traits<mhwimm_config_ns::config_t>::skey_t *
 pmhwiroot_path(nullptr);
@@ -142,33 +139,17 @@ int main(void)
     return -1;
   }
 
-  std::string db_path = conf.mhwimmroot;
-
-  /* install signal handlers */
-  struct sigaction siga = {0};
-  siga.sa_handler = SIGINT_handler;
-  siga.sa_flags = 0;
-
-  sigemptyset(&siga.sa_mask);
-  sigaddset(&siga.sa_mask, SIGTERM);
-
-  if (sigaction(SIGINT, &siga, NULL) < 0) {
-    std::cerr << "main(): error: Failed to setup SIGINT handler." << std::endl;
+  // setup signal mask
+  sigset_t new_mask;
+  sigemptyset(&new_mask);
+  sigaddset(&new_mask, SIGINT);
+  sigaddset(&new_mask, SIGTERM);
+  if (sigprocmask(SIG_BLOCK,&new_mask, NULL) < 0) {
+    std::cerr << "main(): Attempts to block SIGINT and SIGTERM was failed." << std::endl;
     return -1;
   }
 
-  siga.sa_handler = SIGTERM_handler;
-  sigemptyset(&siga.sa_mask);
-  sigaddset(&siga.sa_mask, SIGINT);
-
-  if (sigaction(SIGTERM, &siga, NULL) < 0) {
-    std::cerr << "main(): error: Failed to setup SIGTERM handler." << std::endl;
-  }
-
-  sigemptyset(&siga.sa_mask);
-  sigaddset(&siga.sa_mask, SIGINT);
-  sigaddset(&siga.sa_mask, SIGTERM);
-
+  std::string db_path = conf.mhwimmroot;
   pmhwiroot_path = &conf.mhwiroot;
   // print the paths
   std::cout << "userhome: " << conf.userhome
@@ -186,32 +167,6 @@ int main(void)
   std::thread exe_thread(mhwimm_executor_thread_worker, std::ref(exe), std::ref(uiexe_ctrl_msg),
                          std::ref(mfl));
   std::thread db_thread(mhwimm_db_thread_worker, std::ref(db));
-
-  int sig = 0;
-
-  if (pthread_sigmask(SIG_BLOCK, &siga.sa_mask, NULL) < 0) {
-    std::cerr << "main(): error: Failed to setup thread signal mask." <<std::endl;
-    program_exit = 1;
-  }
-
- repeat_sigwait:
-
-  if (program_exit) {
-    goto exit_wait_threads;
-  }
-
-  if (sigwait(&siga.sa_mask, &sig) < 0) {
-    program_exit = 1;
-    std::cerr << "main(): error: Error detected when main thread doing signal wait." << std::endl;
-  }
-
-  if (sig != SIGINT && sig != SIGTERM) {
-    if (!program_exit)
-      goto repeat_sigwait;
-  }
-
- exit_wait_threads:
-  kill(getpid(), SIGINT);
 
   db_thread.join();
   exe_thread.join();

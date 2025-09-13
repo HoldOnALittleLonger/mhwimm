@@ -19,7 +19,7 @@ void regDBop_getAllInstalled_Modsname(mhwimm_sync_mechanism_ns::mod_files_list *
   assert(db_impl != nullptr);
   mfl_for_db = mfl;
   interest_field = mhwimm_sync_mechanism_ns::INTEREST_FIELD::INTEREST_NAME;
-  mhwimm_db_ns::db_table_record dtr = NULL_dtr;
+  mhwimm_db_ns::db_table_record dtr = _ZERO_dtr;
   db_impl->registerDBOperation(mhwimm_db_ns::SQL_OP::SQL_ASK, dtr);
 
 }

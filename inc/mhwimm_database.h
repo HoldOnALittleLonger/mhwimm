@@ -84,7 +84,7 @@ namespace mhwimm_db_ns {
     std::string install_date;
     uint8_t is_install_date_set:1;
   };
-#define NULL_dtr {          \
+#define _ZERO_dtr {          \
   .mod_name = "BUG",        \
   .is_mod_name_set = 0,     \
   .file_path = "BUG",       \
@@ -107,7 +107,7 @@ namespace mhwimm_db_ns {
       sql_stmt_ = nullptr;
       current_op_ = SQL_OP::SQL_NOP;
       current_status_ = DB_STATUS::DB_IDLE;
-      record_buf_ = db_table_record NULL_dtr;
+      record_buf_ = db_table_record _ZERO_dtr;
       local_err_msg_ = "nil";
       more_rows_indicator_ = false;
     }
@@ -193,7 +193,7 @@ namespace mhwimm_db_ns {
     {
       current_status_ = DB_STATUS::DB_IDLE;
       current_op_ = SQL_OP::SQL_NOP;
-      record_buf_ = db_table_record NULL_dtr;
+      record_buf_ = db_table_record _ZERO_dtr;
     }
 
     void getDBErrMsg(std::string &outside_buf) const noexcept

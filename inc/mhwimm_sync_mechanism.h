@@ -11,11 +11,18 @@
 #include <mutex>
 #include <condition_variable>
 #include <list>
+#include <cassert>
 
 #include "mhwimm_database.h"
 
-// prevent the interval between lock and unlock too short
-#define NOP_DELAY() for (int i(10240); i > 0; --i)
+/* makeup_uniquelock_and_associate_condv
+ *   - macro function used to build a local variable named @name
+ *     is type of std::unique_lock<std::mutex>,and initializer
+ *     it with @condv.lock_data.
+ *     the unique lock is locked by default.
+ */
+#define makeup_uniquelock_and_associate_condv(name, condv) \
+  std::unique_lock<std::mutex> name((condv).lock_data)
 
 /* C99 standard */
 typedef int atomic_t;
@@ -25,9 +32,7 @@ namespace mhwimm_sync_mechanism_ns {
   /**
    * conditionv - condition variable synchronization
    * data members:
-   *   @lock_data:  std::mutex object will hold by @lock
-   *   @lock:       std::unique_lock object used by
-   *                condition variable
+   *   @lock_data:  std::mutex object
    *   @condv:      condition variable
    *   @value:      sequence counter
    * methods:
@@ -42,43 +47,58 @@ namespace mhwimm_sync_mechanism_ns {
    */
   struct conditionv {
     std::mutex lock_data;
-    std::unique_lock<std::mutex> lock;
     std::condition_variable condv;
     atomic_t value;
 
     conditionv()
-      : lock_data(), lock(lock_data)
+      : lock_data()
     {
-      lock.unlock();
       value = 0;
     }
 
-    void wait_cond_odd(void)
+    void wait_cond_v(std::unique_lock<std::mutex> &unlocked_ul, int v)
     {
-      this->lock.lock();
-      this->condv.wait(this->lock,
+      assert(unlocked_ul.mutex() == &this->lock_data);
+      unlocked_ul.lock();
+      this->condv.wait(unlocked_ul,
+                       [&, this](void) -> bool {
+                         return this->value == v;
+                       });
+    }
+
+    void wait_cond_odd(std::unique_lock<std::mutex> &unlocked_ul)
+    {
+      assert(unlocked_ul.mutex() == &this->lock_data);
+      unlocked_ul.lock();
+      this->condv.wait(unlocked_ul,
                        [&, this](void) -> bool {
                          return this->value % 2;
                        });
     }
 
-    void wait_cond_even(void)
+    void wait_cond_even(std::unique_lock<std::mutex> &unlocked_ul)
     {
-      this->lock.lock();
-      this->condv.wait(this->lock,
+      assert(unlocked_ul.mutex() == &this->lock_data);
+      unlocked_ul.lock();
+      this->condv.wait(unlocked_ul,
                        [&, this](void) -> bool {
                          return !(this->value % 2);
                        });
     }
 
-    void unlock(void) { lock.unlock(); }
+    void unlock(std::unique_lock<std::mutex> &locked_ul)
+    { 
+      assert(locked_ul.mutex() == &this->lock_data);
+      locked_ul.unlock();
+    }
+
     void update(void) { ++value; }
     void notify_one(void) { condv.notify_one(); }
 
-    void update_and_notify(void)
+    void update_and_notify(std::unique_lock<std::mutex> &locked_ul)
     {
       update();
-      unlock();
+      unlock(locked_ul);
       notify_one();
     }
   };
