@@ -1,4 +1,4 @@
-                                              Monster Hunter World:Iceborne Mod Manager Command Line Tool
+                                                Monster Hunter World:Iceborne Mod Manager Command Line Tool
 
 Why am I write this application?
         Just interesting.
@@ -22,7 +22,9 @@ User Interface :
 
 Mod record :
         sqlite table record format :
-        [ mod_name ] [ file_path ] [ install_date ]
+        [ mod_name ] [ file_path ] [ install_date ] [ unused_id ]
+                                                      |
+                                                      +--> as primary key(auto inc)
 
 Module :
         UI
@@ -35,6 +37,8 @@ Module :
 Command :
         cd <path>
          => change current work directory
+        pwd
+         => get current work directory
         ls
          => list current work directory
         install <mod name without space> <mod directory - relative path - without space>
@@ -43,6 +47,8 @@ Command :
          => query what mods been installed
         uninstall <mod name without space>
          => uninstall a mod
+        get_config <key>
+         => get config value of @key
         config <key>=<value>
          => set config option
         exit
@@ -67,8 +73,8 @@ Program exit :
         should stop and exit
 
 Signal :
-        SIGINT  => set @program_exit to TRUE
-        SIGTERM => set @program_exit to TRUE
+        SIGINT  => blocked
+        SIGTERM => blocked
 
 Development Environment :
         Language >
