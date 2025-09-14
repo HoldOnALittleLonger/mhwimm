@@ -29,6 +29,7 @@ namespace mhwimm_executor_ns {
 #define ERROR_MSG_OPENDIR "error: Failed to open directory."
 #define ERROR_MSG_MKDIR "error: Failed to make a directory."
 #define ERROR_MSG_STATPATH "error: Can not retrieve the stat of path."
+#define ERROR_MSG_PWD "error: Can not get current work directory."
 #define ERROR_MSG_ERRFORM "error: Incorrect format."
 #define ERROR_MSG_UNKNOWNCMD "error: Unknown cmd."
 #define ERROR_MSG_UNKNOWNCONF "error: Unknown conf."
@@ -59,10 +60,12 @@ namespace mhwimm_executor_ns {
   {
 
 #define CD_CMD_KEY 199
+#define PWD_CMD_KEY 331
 #define LS_CMD_KEY 223
 #define INSTALL_CMD_KEY 759
 #define UNINSTALL_CMD_KEY 986
 #define INSTALLED_CMD_KEY 960
+#define GET_CONFIG_CMD_KEY 1045
 #define CONFIG_CMD_KEY 630
 #define EXIT_CMD_KEY 442
 #define COMMANDS_CMD_KEY 850
@@ -87,9 +90,6 @@ namespace mhwimm_executor_ns {
     // first strtok()
     const char *arg(strtok(cmd_tmp_buf, " "));
 
-    bool parse_more(false);
-    nparams_ = 0; // reset number of parameters
-
     switch (calculate_key(arg)) {
     case EXIT_CMD_KEY:
       setCMD(mhwimm_executor_cmd::EXIT);
@@ -102,19 +102,21 @@ namespace mhwimm_executor_ns {
       break;
     case CD_CMD_KEY:
       setCMD(mhwimm_executor_cmd::CD);
-      parse_more = true;
+      break;
+    case PWD_CMD_KEY:
+      setCMD(mhwimm_executor_cmd::PWD);
       break;
     case INSTALL_CMD_KEY:
       setCMD(mhwimm_executor_cmd::INSTALL);
-      parse_more = true;
       break;
     case UNINSTALL_CMD_KEY:
       setCMD(mhwimm_executor_cmd::UNINSTALL);
-      parse_more = true;
+      break;
+    case GET_CONFIG_CMD_KEY:
+      setCMD(mhwimm_executor_cmd::GET_CONFIG);
       break;
     case CONFIG_CMD_KEY:
       setCMD(mhwimm_executor_cmd::CONFIG);
-      parse_more = true;
       break;
     case COMMANDS_CMD_KEY:
     case HELP_CMD_KEY:
@@ -124,18 +126,19 @@ namespace mhwimm_executor_ns {
       setCMD(mhwimm_executor_cmd::NOP);
     }
 
-    if (parse_more) {
-      // parse the same string via strtok
-      while ((arg = strtok(NULL, " "))) {
-        parameters_[nparams_++] = arg;
-      }
+    nparams_ = 0;
+    // parse the same string via strtok
+    while ((arg = strtok(NULL, " "))) {
+      parameters_[nparams_++] = arg;
     }
 
 #undef CD_CMD_KEY
+#undef PWD_CMD_KEY
 #undef LS_CMD_KEY
 #undef INSTALL_CMD_KEY
 #undef UNINSTALL_CMD_KEY
 #undef INSTALLED_CMD_KEY
+#undef GET_CONFIG_CMD_KEY
 #undef CONFIG_CMD_KEY
 #undef EXIT_CMD_KEY
 #undef COMMANDS_CMD_KEY
@@ -165,35 +168,43 @@ namespace mhwimm_executor_ns {
     case mhwimm_executor_cmd::CD:
       if (cmd_cd_syntaxChecking())
         return cd();
-      goto err_syntax;
+      break;
+    case mhwimm_executor_cmd::PWD:
+      if (cmd_pwd_syntaxChecking())
+        return pwd();
+      break;
     case mhwimm_executor_cmd::LS:
       if (cmd_ls_syntaxChecking())
         return ls();
-      goto err_syntax;
+      break;
     case mhwimm_executor_cmd::INSTALL:
       if (cmd_install_syntaxChecking())
         return install();
-      goto err_syntax;
+      break;
     case mhwimm_executor_cmd::UNINSTALL:
       if (cmd_uninstall_syntaxChecking())
         return uninstall();
-      goto err_syntax;
+      break;
     case mhwimm_executor_cmd::INSTALLED:
       if (cmd_installed_syntaxChecking())
         return installed();
-      goto err_syntax;
+      break;
+    case mhwimm_executor_cmd::GET_CONFIG:
+      if (cmd_get_config_syntaxChecking())
+        return get_config();
+      break;
     case mhwimm_executor_cmd::CONFIG:
       if (cmd_config_syntaxChecking())
         return config();
-      goto err_syntax;
+      break;
     case mhwimm_executor_cmd::EXIT:
       if (cmd_exit_syntaxChecking())
         return exit();
-      goto err_syntax;
+      break;
     case mhwimm_executor_cmd::COMMANDS:
       if (cmd_commands_syntaxChecking())
         return commands();
-      goto err_syntax;
+      break;
     case mhwimm_executor_cmd::NOP:
       current_status_ = mhwimm_executor_status::IDLE;
       return 0;
@@ -220,6 +231,39 @@ namespace mhwimm_executor_ns {
     }
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
+  }
+
+  /* pwd - get current work directory */
+  int mhwimm_executor::pwd(void) noexcept
+  {
+    current_status_ = mhwimm_executor_status::WORKING;
+    
+    std::size_t path_length(pathconf("/", _PC_PATH_MAX));
+    char *cwd(nullptr);
+    
+    try {
+      cwd = new char[path_length];
+    } catch (std::bad_alloc &) {
+      generic_err_msg_output(ERROR_MSG_MEM);
+      current_status_ = mhwimm_executor_status::ERROR;
+      return -1;
+    }
+
+    int ret(getcwd(cwd, path_length) == NULL);
+    ret *= -1;
+
+    current_status_ = mhwimm_executor_status::IDLE;
+    if (ret) {
+      generic_err_msg_output(ERROR_MSG_PWD);
+      current_status_ = mhwimm_executor_status::ERROR;
+    } else {
+      cmd_output_msgs_[0] = cwd;
+      noutput_msgs_ = 1;
+      is_cmd_has_output_ = true;
+    }
+
+    delete[] cwd;
+    return ret;
   }
 
   /* ls - list files under current work directory */
@@ -273,12 +317,43 @@ namespace mhwimm_executor_ns {
     return 0;
   }
 
-  /* config - modify value of config option of config structure */
-  int mhwimm_executor::config(void) noexcept
+  /* get_config - get the value of a config option */
+  int mhwimm_executor::get_config(void) noexcept
   {
 #define CONFIG_USERHOME 616
 #define CONFIG_MHWIROOT 633
 #define CONFIG_MHWIMMROOT 787
+
+    current_status_ = mhwimm_executor_status::WORKING;
+    const auto &key(parameters_[0]);
+    typename mhwimm_config_ns::get_config_traits<mhwimm_config_ns::config_t>::skey_t s;
+
+    switch (calculate_key(key.c_str())) {
+    case CONFIG_USERHOME:
+      s = conf_->userhome;
+      break;
+    case CONFIG_MHWIROOT:
+      s = conf_->mhwiroot;
+      break;
+    case CONFIG_MHWIMMROOT:
+      s = conf_->mhwimmroot;
+      break;
+    default:
+      generic_err_msg_output(ERROR_MSG_UNKNOWNCONF);
+      current_status_ = mhwimm_executor_status::ERROR;
+      return -1;
+    }
+    
+    cmd_output_msgs_[0] = s;
+    noutput_msgs_ = 1;
+    is_cmd_has_output_ = true;
+    current_status_ = mhwimm_executor_status::IDLE;
+    return 0;
+  }
+
+  /* config - modify value of config option of config structure */
+  int mhwimm_executor::config(void) noexcept
+  {
 
     current_status_ = mhwimm_executor_status::WORKING;
 
@@ -603,25 +678,28 @@ namespace mhwimm_executor_ns {
   int mhwimm_executor::commands(void) noexcept
   {
     constexpr const char *cd_description = "cd <path> - change current work directory";
+    constexpr const char *pwd_description = "pwd - get current work directory";
     constexpr const char *ls_description = "ls - list files under current work direcotry";
     constexpr const char *install_description = "install <mod name> <mod directory - relative path>"
                                                 " - install mod @mode_name,its files are existed in @mod_direcotry";
     constexpr const char *unintall_description = "unintall <mod name> - unintall mod @mod_name";
+    constexpr const char *get_config_description = "get_config <config name> - get the value of config";
     constexpr const char *config_description = "config <key>=<value> - set config,implemented @userhome @mhwiroot, @mhwimmroot";
     constexpr const char *exit_description = "exit - exit application";
     constexpr const char *commands_description = "commands - list commands and print description";
     constexpr const char *help_description = "help - help message,implemented as cmd commands";
 
-    constexpr uint8_t ndescriptions = 8;
+    constexpr uint8_t ndescriptions = 10;
 
     constexpr const char *descriptions[ndescriptions] = {
-      cd_description, ls_description, install_description, unintall_description,
-      config_description, exit_description, commands_description, help_description
+      cd_description, pwd_description, ls_description, install_description, unintall_description,
+      get_config_description, config_description, exit_description, commands_description, help_description
     };
 
     current_status_ = mhwimm_executor_status::WORKING;
 
     for (uint8_t i(0); i < ndescriptions; ++i) {
+      rs_vec_if_necessary(cmd_output_msgs_, i);
       cmd_output_msgs_[i] = descriptions[i];
     }
 

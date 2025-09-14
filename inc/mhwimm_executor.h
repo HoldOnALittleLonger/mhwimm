@@ -30,10 +30,12 @@ namespace mhwimm_executor_ns {
    */
   enum class mhwimm_executor_cmd : uint8_t {
     CD,
+    PWD,
     LS,
     INSTALL,
     UNINSTALL,
     INSTALLED,
+    GET_CONFIG,
     CONFIG,
     EXIT,
     COMMANDS,
@@ -129,10 +131,12 @@ namespace mhwimm_executor_ns {
 
     // some command may always return _zero_
     int cd(void) noexcept;
+    int pwd(void) noexcept;
     int ls(void) noexcept;
     int install(void) noexcept;
     int uninstall(void) noexcept;
     int installed(void) noexcept;
+    int get_config(void) noexcept;
     int config(void) noexcept;
     int exit(void) noexcept;
     int commands(void) noexcept;
@@ -144,7 +148,8 @@ namespace mhwimm_executor_ns {
     }
 
     bool cmd_cd_syntaxChecking(void) { return syntaxChecking(1); }
-    bool cmd_ls_syntaxChecking(void) { return true; }
+    bool cmd_pwd_syntaxChecking(void) { return syntaxChecking(0); }
+    bool cmd_ls_syntaxChecking(void) { return syntaxChecking(0); }
     bool cmd_install_syntaxChecking(void)
     {
       if (syntaxChecking(2)) {
@@ -156,7 +161,8 @@ namespace mhwimm_executor_ns {
       return false;
     }
     bool cmd_uninstall_syntaxChecking(void) { return syntaxChecking(1); }
-    bool cmd_installed_syntaxChecking(void) { return true; }
+    bool cmd_installed_syntaxChecking(void) { return syntaxChecking(0); }
+    bool cmd_get_config_syntaxChecking(void) { return syntaxChecking(1); }
 
     /**
      * cmd_config_syntaxChecking - do syntax checking for command "config",
