@@ -484,19 +484,17 @@ namespace mhwimm_executor_ns {
     std::string cwd(getcwd(path_tmp, 256));
     struct stat mhwiroot_stat = {0};
 
+    /* record the position of link interrupted
+     * we place it at there that because C++
+     * forbid jump a section which included
+     * a class constructor calling
+     */
+    auto link_intr(mfiles_list_->regular_file_list.begin());
+
+    // mhwi root directory is not exist.
     if (stat(mhwiroot.c_str(), &mhwiroot_stat) < 0) {
       generic_err_msg_output(ERROR_MSG_STATPATH);
       goto err_exit;
-    }
-
-    // conflicting checking
-    for (auto i : mfiles_list_->regular_file_list) {
-      std::string newpath(mhwiroot + i);
-      struct stat s = {0};
-      if (stat(newpath.c_str(), &s) == 0) {
-        generic_err_msg_output(ERROR_MSG_MODCONFLICT);
-        goto err_exit;
-      }
     }
 
     // mkdirs
@@ -518,18 +516,22 @@ namespace mhwimm_executor_ns {
     }
 
     // link regular files
-    for (auto i : mfiles_list_->regular_file_list) {
-      std::string oldpath(cwd + "/" + moddir + i);
-      std::string newpath(mhwiroot + i);
+    for ( ; link_intr != mfiles_list_->regular_file_list.end();
+          ++link_intr) {
+      std::string oldpath(cwd + "/" + moddir + *link_intr);
+      std::string newpath(mhwiroot + *link_intr);
 
-#ifdef DEBUG
       errno = 0;
-#endif
       if (link(oldpath.c_str(), newpath.c_str()) < 0) {
+        if (errno == EEXIST)
+          generic_err_msg_output(ERROR_MSG_MODCONFLICT);
+        else
+          generic_err_msg_output(ERROR_MSG_LINK);
+
 #ifdef DEBUG
         std::cerr << strerror(errno) << std::endl;
 #endif
-        generic_err_msg_output(ERROR_MSG_LINK);
+
         goto err_exit_unlink_file;
       }
     }
@@ -538,8 +540,9 @@ namespace mhwimm_executor_ns {
     return 0;
 
   err_exit_unlink_file:
-    for (auto i : mfiles_list_->regular_file_list)
-      unlink((mhwiroot + i).c_str());
+    for (auto i(mfiles_list_->regular_file_list.begin());
+        i != link_intr; ++i)
+      unlink((mhwiroot + *i).c_str());
 
   err_exit_remove_dir:
     // we need to reverse elements that is because we
@@ -683,17 +686,19 @@ namespace mhwimm_executor_ns {
     constexpr const char *install_description = "install <mod name> <mod directory - relative path>"
                                                 " - install mod @mode_name,its files are existed in @mod_direcotry";
     constexpr const char *unintall_description = "unintall <mod name> - unintall mod @mod_name";
+    constexpr const char *installed_description = "installed - retrieve info of installed mods";
     constexpr const char *get_config_description = "get_config <config name> - get the value of config";
     constexpr const char *config_description = "config <key>=<value> - set config,implemented @userhome @mhwiroot, @mhwimmroot";
     constexpr const char *exit_description = "exit - exit application";
     constexpr const char *commands_description = "commands - list commands and print description";
     constexpr const char *help_description = "help - help message,implemented as cmd commands";
 
-    constexpr uint8_t ndescriptions = 10;
+    constexpr uint8_t ndescriptions = 11;
 
     constexpr const char *descriptions[ndescriptions] = {
       cd_description, pwd_description, ls_description, install_description, unintall_description,
-      get_config_description, config_description, exit_description, commands_description, help_description
+      installed_description, get_config_description, config_description, exit_description,
+      commands_description, help_description
     };
 
     current_status_ = mhwimm_executor_status::WORKING;
