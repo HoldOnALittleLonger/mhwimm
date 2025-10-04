@@ -64,6 +64,8 @@ void mhwimm_ui_thread_worker(mhwimm_ui_ns::mhwimm_ui &mmui, uiexemsgexchg &ctrlm
     // do not update sequence counter,because it is not
     // the time to Executor start a new trasaction.
     ctrlmsg.condv_sync.unlock(uiexe_lock);
+
+    mmui.newLine();
   }
 
   // we exited the for-cycle,but the condv is still
