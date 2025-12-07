@@ -200,19 +200,41 @@ namespace mhwimm_executor_ns {
       std::string key(parameters_[0].substr(0, equal_pos - parameters_[0].begin()));
       std::string val(parameters_[0].substr(equal_pos - parameters_[0].begin() + 1,
                                             parameters_[0].end() - equal_pos - 1));
-
+      std::size_t nquote(0);
+      unsigned int recent_quote_index(0);
       /* deal with format "aa bb cc" */
       if (val[0] == '"') {
-        std::size_t nquote = 1;
+        nquote = 1;
         val = val.substr(1);
+
+        /* we start from index 1,because the parameter at index 0 have been 
+         * parsed
+         */
         for (auto i(1); i < nparams_; ++i) {
           const std::string& pstring(parameters_[i]);
           auto index(pstring.find("\""));
-          if (index != std::string::npos && ++nquote > 2)
-            return false;
+          if (index != std::string::npos) {
+            recent_quote_index = i;
+            if (++nquote > 2)
+              break;
+          }
 
           val += (std::string{" "} + pstring.substr(0, index));
         }
+      }
+
+      switch (nquote) {
+      case 2:
+        /* if quote is legal,there must no following parameters */
+        if (recent_quote_index == nparams_ - 1)
+          break;
+        return false;
+      case 0:
+        /* if no quote,then the number of parameters must be 1 */
+        if (syntaxChecking(1))
+          break;
+      default:    /* illegal quote */
+        return false;
       }
 
       parameters_[0] = key;
