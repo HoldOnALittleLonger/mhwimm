@@ -168,10 +168,13 @@ namespace mhwimm_executor_ns {
      * cmd_config_syntaxChecking - do syntax checking for command "config",
      *                             and then splite parameters if no syntax
      *                             error detected
+     * # because the path name may contains SPACE,if the SPACE is appears in
+     *   a string "aa bb cc",it would not be counted,and the whole string should
+     *   as one parameter.
      */
     bool cmd_config_syntaxChecking(void) {
-      // first,must have "key = value" pair
-      if (!syntaxChecking(1))
+      // first,must have "key=value" pair
+      if (syntaxChecking(0))
         return false;
 
       // second,checks if the pair is correct format
@@ -182,6 +185,7 @@ namespace mhwimm_executor_ns {
       for (auto idx(equal_pos); idx != parameters_[0].end(); ++idx) {
         char c(*idx);
         if (c == ' ')
+          /* prevent format : "configname[SPACE]=[SPACE]key" */
           ++nspace_character;
         else if (c == '=') {
           ++nequal_character;
@@ -191,11 +195,25 @@ namespace mhwimm_executor_ns {
 
       if (nspace_character || nequal_character > 1)
         return false;
-
+      
       // third,splite "key=value" pair to two parameters
       std::string key(parameters_[0].substr(0, equal_pos - parameters_[0].begin()));
       std::string val(parameters_[0].substr(equal_pos - parameters_[0].begin() + 1,
                                             parameters_[0].end() - equal_pos - 1));
+
+      /* deal with format "aa bb cc" */
+      if (val[0] == '"') {
+        std::size_t nquote = 1;
+        val = val.substr(1);
+        for (auto i(1); i < nparams_; ++i) {
+          const std::string& pstring(parameters_[i]);
+          auto index(pstring.find("\""));
+          if (index != std::string::npos && ++nquote > 2)
+            return false;
+
+          val += (std::string{" "} + pstring.substr(0, index));
+        }
+      }
 
       parameters_[0] = key;
       parameters_[1] = val;
