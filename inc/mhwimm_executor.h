@@ -147,7 +147,66 @@ namespace mhwimm_executor_ns {
       return nparams_ == req_nparams;
     }
 
-    bool cmd_cd_syntaxChecking(void) { return syntaxChecking(1); }
+    bool __makeupPathname(std::size_t max_nparams, std::string& buf)
+    {
+      /* splice strings if some are exist*/
+      std::string tmp{parameters_[0]};
+      for (auto i(1); i < nparams_; ++i)
+        tmp += std::string{std::string{" "} + parameters_[i]};
+
+      /* resize buffer for get space to hold pathname */
+      buf.resize(tmp.length());
+
+      std::size_t i(0);
+      std::size_t buf_index(0);
+      std::size_t nquote(0);
+      std::size_t i_recent_quote(0);
+      std::size_t nescape(0);
+
+      for (auto c : tmp) {
+        switch (c) {
+        case '"':
+          i_recent_quote = i;
+          if (++nquote >= 2)
+            goto traversing_end;
+          ++i;
+          continue;
+        case '\\':
+          ++nescape;
+          ++i;
+          continue;
+        }
+
+        buf[buf_index++] = c;
+        ++i;
+      }
+    traversing_end:
+
+      switch (nquote) {
+      case 2:
+        if (tmp.length() > i_recent_quote + 1)
+          return false;
+        break;
+      case 1:
+        return false;
+      case 0:
+        if (!nescape && !syntaxChecking(max_nparams))
+          return false;
+        break;
+      }
+
+      return true;
+    }
+
+    bool cmd_cd_syntaxChecking(void)
+    {
+      std::string pathname;
+      if (!__makeupPathname(1, pathname))
+        return false;
+      parameters_[0] = pathname;
+      return true;
+    }
+
     bool cmd_pwd_syntaxChecking(void) { return syntaxChecking(0); }
     bool cmd_ls_syntaxChecking(void) { return syntaxChecking(0); }
     bool cmd_install_syntaxChecking(void)
@@ -200,42 +259,10 @@ namespace mhwimm_executor_ns {
       std::string key(parameters_[0].substr(0, equal_pos - parameters_[0].begin()));
       std::string val(parameters_[0].substr(equal_pos - parameters_[0].begin() + 1,
                                             parameters_[0].end() - equal_pos - 1));
-      std::size_t nquote(0);
-      unsigned int recent_quote_index(0);
-      /* deal with format "aa bb cc" */
-      if (val[0] == '"') {
-        nquote = 1;
-        val = val.substr(1);
-
-        /* we start from index 1,because the parameter at index 0 have been 
-         * parsed
-         */
-        for (auto i(1); i < nparams_; ++i) {
-          const std::string& pstring(parameters_[i]);
-          auto index(pstring.find("\""));
-          if (index != std::string::npos) {
-            recent_quote_index = i;
-            if (++nquote > 2)
-              break;
-          }
-
-          val += (std::string{" "} + pstring.substr(0, index));
-        }
-      }
-
-      switch (nquote) {
-      case 2:
-        /* if quote is legal,there must no following parameters */
-        if (recent_quote_index == nparams_ - 1)
-          break;
+      parameters_[0] = val;
+      val.clear();
+      if (!__makeupPathname(1, val))
         return false;
-      case 0:
-        /* if no quote,then the number of parameters must be 1 */
-        if (syntaxChecking(1))
-          break;
-      default:    /* illegal quote */
-        return false;
-      }
 
       parameters_[0] = key;
       parameters_[1] = val;
