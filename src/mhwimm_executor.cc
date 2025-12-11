@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <exception>
 #include <functional>
+#include <fstream>
 
 #ifdef DEBUG
 // for debug
@@ -26,6 +27,7 @@ namespace mhwimm_executor_ns {
 
 #define ERROR_MSG_MEM "error: Failed to allocate memory."
 #define ERROR_MSG_CHDIR "error: Failed enter the directory."
+#define ERROR_MSG_OPENFILE "error: Failed to open file."
 #define ERROR_MSG_OPENDIR "error: Failed to open directory."
 #define ERROR_MSG_MKDIR "error: Failed to make a directory."
 #define ERROR_MSG_STATPATH "error: Can not retrieve the stat of path."
@@ -34,7 +36,7 @@ namespace mhwimm_executor_ns {
 #define ERROR_MSG_UNKNOWNCMD "error: Unknown cmd."
 #define ERROR_MSG_UNKNOWNCONF "error: Unknown conf."
 #define ERROR_MSG_TRAVERSE_DIR "error: Failed to traverse directory."
-#define ERROR_MSG_LINK "error: Failed to install mod."
+#define ERROR_MSG_IO "error: Failed to install mod."
 #define ERROR_MSG_UNINSNMOD "error: Attempt to uninstall an not exist mod."
 #define ERROR_MSG_UNINSTALL "error: Failed to uninstall mod."
 #define ERROR_MSG_NOMODINS "error: No mod been installed."
@@ -484,12 +486,23 @@ namespace mhwimm_executor_ns {
     std::string cwd(getcwd(path_tmp, 256));
     struct stat mhwiroot_stat = {0};
 
-    /* record the position of link interrupted
+    /* record the position of link(copying) interrupted
      * we place it at there that because C++
      * forbid jump a section which included
      * a class constructor calling
      */
     auto link_intr(mfiles_list_->regular_file_list.begin());
+
+    /* used to indicate whether regular file copying encountered error */
+    bool fcopying_err(false);
+
+    /* regular file buffer */
+    const std::size_t file_buf_size(4096); /* usually,PAGE_SIZE */
+    char *file_buffer = new char[file_buf_size];
+    if (!file_buffer) {
+      generic_err_msg_output(ERROR_MSG_MEM);
+      goto err_exit;
+    }
 
     // mhwi root directory is not exist.
     if (stat(mhwiroot.c_str(), &mhwiroot_stat) < 0) {
@@ -515,31 +528,88 @@ namespace mhwimm_executor_ns {
       }
     }
 
-    // link regular files
-    for ( ; link_intr != mfiles_list_->regular_file_list.end();
+    /**
+     * Use file creating-wrting to instead link inode,because link()
+     * does not work across different mounts - EXDEV
+     */
+    // link(copy) regular files
+    for ( ; !fcopying_err && link_intr != mfiles_list_->regular_file_list.end();
           ++link_intr) {
       std::string oldpath(cwd + "/" + moddir + *link_intr);
       std::string newpath(mhwiroot + *link_intr);
 
-      errno = 0;
-      if (link(oldpath.c_str(), newpath.c_str()) < 0) {
-        if (errno == EEXIST)
-          generic_err_msg_output(ERROR_MSG_MODCONFLICT);
-        else
-          generic_err_msg_output(ERROR_MSG_LINK);
-
-#ifdef DEBUG
-        std::cerr << strerror(errno) << std::endl;
-#endif
-
-        goto err_exit_unlink_file;
+      struct stat tmp_stat = {0};
+      if (!stat(newpath.c_str(), &tmp_stat)) {
+        /* file conflict detected,such file been existed */
+        generic_err_msg_output(ERROR_MSG_MODCONFLICT);
+        fcopying_err = true;
+        break;
       }
+
+      std::ofstream sink;
+      std::ifstream source;
+
+      /* open files */
+      source.open(oldpath.c_str(), std::ios_base::in | std::ios_base::binary);
+      if (!source.is_open()) {
+        generic_err_msg_output(ERROR_MSG_OPENFILE);
+        fcopying_err = true;
+        break;
+      }
+
+      sink.open(newpath.c_str(), std::ios_base::out | std::ios_base::binary);
+      if (!sink.is_open()) {
+        generic_err_msg_output(ERROR_MSG_OPENFILE);
+        fcopying_err = true;
+        break;
+      }
+
+      /* IO */
+      fcopying_err = false;
+      while (1) {
+        std::size_t result(0);
+
+        /* read */
+        source.read(file_buffer, file_buf_size);
+        result = source.gcount();
+        if (!result) {
+          if (source.eof())
+            break; /* this is the legal stop point */
+          else {
+            generic_err_msg_output(ERROR_MSG_IO);
+            ++link_intr;
+            fcopying_err = true;
+            break;
+          }
+        }
+
+        /* write */
+        std::ofstream::pos_type before_write(sink.tellp());
+        sink.write(file_buffer, result);
+        std::size_t written(sink.tellp() - before_write); /* written bytes */
+        if (written != result) {
+          generic_err_msg_output(ERROR_MSG_IO);
+          ++link_intr; /* we need to unlink current sink file */
+          fcopying_err = true;
+          break;
+        }
+      }
+
+      source.close();
+      sink.close();
     }
+
+    /* need UNDO */
+    if (fcopying_err)
+      goto err_exit_remove_file;
+
+    /* delete memory at normal return path */
+    delete[] file_buffer;
 
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
 
-  err_exit_unlink_file:
+  err_exit_remove_file:
     for (auto i(mfiles_list_->regular_file_list.begin());
         i != link_intr; ++i)
       unlink((mhwiroot + *i).c_str());
@@ -547,7 +617,7 @@ namespace mhwimm_executor_ns {
   err_exit_remove_dir:
     // we need to reverse elements that is because we
     // insert them at end of container,and the last
-    // element must bethe last directory,because we
+    // element must be the last directory,because we
     // traverse directory followed the rule -
     // always start a new recursion for traverse the
     // new directory whenever we encountered it.
@@ -556,8 +626,10 @@ namespace mhwimm_executor_ns {
       rmdir((mhwiroot + i).c_str());
 
   err_exit:
+    delete[] file_buffer; /* delete memory when detected error */
+
     current_status_ = mhwimm_executor_status::ERROR;
-    return - 1;
+    return -1;
   }
 
   /**
