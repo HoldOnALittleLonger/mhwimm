@@ -9,6 +9,7 @@
 #include <exception>
 #include <functional>
 #include <fstream>
+#include <memory>
 
 #ifdef DEBUG
 // for debug
@@ -498,7 +499,8 @@ namespace mhwimm_executor_ns {
 
     /* regular file buffer */
     const std::size_t file_buf_size(4096); /* usually,PAGE_SIZE */
-    char *file_buffer = new char[file_buf_size];
+
+    std::unique_ptr<char> file_buffer(new char[file_buf_size]);
     if (!file_buffer) {
       generic_err_msg_output(ERROR_MSG_MEM);
       goto err_exit;
@@ -538,8 +540,7 @@ namespace mhwimm_executor_ns {
       std::string oldpath(cwd + "/" + moddir + *link_intr);
       std::string newpath(mhwiroot + *link_intr);
 
-      struct stat tmp_stat = {0};
-      if (!stat(newpath.c_str(), &tmp_stat)) {
+      if (!access(newpath.c_str(), F_OK)) {
         /* file conflict detected,such file been existed */
         generic_err_msg_output(ERROR_MSG_MODCONFLICT);
         fcopying_err = true;
@@ -570,7 +571,7 @@ namespace mhwimm_executor_ns {
         std::size_t result(0);
 
         /* read */
-        source.read(file_buffer, file_buf_size);
+        source.read(file_buffer.get(), file_buf_size);
         result = source.gcount();
         if (!result) {
           if (source.eof())
@@ -585,7 +586,7 @@ namespace mhwimm_executor_ns {
 
         /* write */
         std::ofstream::pos_type before_write(sink.tellp());
-        sink.write(file_buffer, result);
+        sink.write(file_buffer.get(), result);
         std::size_t written(sink.tellp() - before_write); /* written bytes */
         if (written != result) {
           generic_err_msg_output(ERROR_MSG_IO);
@@ -604,7 +605,6 @@ namespace mhwimm_executor_ns {
       goto err_exit_remove_file;
 
     /* delete memory at normal return path */
-    delete[] file_buffer;
 
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
@@ -626,8 +626,6 @@ namespace mhwimm_executor_ns {
       rmdir((mhwiroot + i).c_str());
 
   err_exit:
-    delete[] file_buffer; /* delete memory when detected error */
-
     current_status_ = mhwimm_executor_status::ERROR;
     return -1;
   }
