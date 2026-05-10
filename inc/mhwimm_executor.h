@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include <map>
 #include <string>
 #include <list>
 
@@ -70,6 +71,8 @@ namespace mhwimm_executor_ns {
         output_info_index_ = 0;
         parameters_.resize(8);
         cmd_output_msgs_.resize(8);
+        __build_CmdKeyMap();
+        __build_ConfigKeyMap();
       }
 
     // no destructor,because the data members of this class
@@ -129,7 +132,7 @@ namespace mhwimm_executor_ns {
 
   private:
 
-    // some command may always return _zero_
+    // some commands may always return _zero_
     int cd(void) noexcept;
     int pwd(void) noexcept;
     int ls(void) noexcept;
@@ -180,8 +183,8 @@ namespace mhwimm_executor_ns {
         buf[buf_index++] = c;
         ++i;
       }
-    traversing_end:
 
+    traversing_end:
       switch (nquote) {
       case 2:
         if (tmp.length() > i_recent_quote + 1)
@@ -287,6 +290,83 @@ namespace mhwimm_executor_ns {
 
     mhwimm_executor_cmd current_cmd_;
     mhwimm_executor_status current_status_;
+
+    /**
+     * @cmd_key_map_ - STL map with key-value pair <std::string, uint32_t>.
+     *                 This object is used as a table for test whether
+     *                 the command received from user is supported.
+     *                 If the command been supported,it must been
+     *                 existing in this table.
+     */
+    std::map<std::string, uint32_t> cmd_key_map_;
+    /**
+     * @config_key_map_ - STL map with key-value pair <std::string, uint32_t>.
+     *                    This object is used as a table to records been
+     *                    supported config options.
+     */
+    std::map<std::string, uint32_t> config_key_map_;
+
+    enum : uint32_t {
+      CD_CMD_KEY = 1,
+      PWD_CMD_KEY,
+      LS_CMD_KEY,
+      INSTALL_CMD_KEY,
+      UNINSTALL_CMD_KEY,
+      INSTALLED_CMD_KEY,
+      GET_CONFIG_CMD_KEY,
+      CONFIG_CMD_KEY,
+      EXIT_CMD_KEY,
+      COMMANDS_CMD_KEY,
+      HELP_CMD_KEY,
+    };
+    enum : uint32_t {
+      CONFIG_USERHOME_KEY = 1,
+      CONFIG_MHWIROOT_KEY,
+      CONFIG_MHWIMMROOT_KEY,
+    };
+
+    /* register commands */
+    void __build_CmdKeyMap(void)
+    {
+      cmd_key_map_.emplace(std::string{"cd"}, CD_CMD_KEY);
+      cmd_key_map_.emplace(std::string{"pwd"}, PWD_CMD_KEY);
+      cmd_key_map_.emplace(std::string{"ls"}, LS_CMD_KEY);
+      cmd_key_map_.emplace(std::string{"install"}, INSTALL_CMD_KEY);
+      cmd_key_map_.emplace(std::string{"uninstall"}, UNINSTALL_CMD_KEY);
+      cmd_key_map_.emplace(std::string{"installed"}, INSTALLED_CMD_KEY);
+      cmd_key_map_.emplace(std::string{"get_config"},GET_CONFIG_CMD_KEY);
+      cmd_key_map_.emplace(std::string{"config"}, CONFIG_CMD_KEY);
+      cmd_key_map_.emplace(std::string{"exit"}, EXIT_CMD_KEY);
+      cmd_key_map_.emplace(std::string{"commands"}, COMMANDS_CMD_KEY);
+      cmd_key_map_.emplace(std::string{"help"}, HELP_CMD_KEY);
+    }
+
+    /* try to find a command's key value */
+    uint32_t __testCMD(const char *cmd_str)
+    {
+      auto iter_result = cmd_key_map_.find(std::string{cmd_str});
+      if (iter_result != cmd_key_map_.end())
+        return iter_result->second;
+      return 0;
+    }
+
+    /* register config options */
+    void __build_ConfigKeyMap(void)
+    {
+      config_key_map_.emplace(std::string{"USERHOME"}, CONFIG_USERHOME_KEY);
+      config_key_map_.emplace(std::string{"MHWIROOT"}, CONFIG_MHWIROOT_KEY);
+      config_key_map_.emplace(std::string{"MHWIMMROOT"}, CONFIG_MHWIMMROOT_KEY);
+    }
+
+    /* try to find a config option's key value */
+    uint32_t __testConfig(const char *cmd_str)
+    {
+      auto iter_result = config_key_map_.find(std::string{cmd_str});
+      if (iter_result != config_key_map_.end())
+        return iter_result->second;
+      return 0;
+    }
+    
 
     // resize vector if necessary
     template<typename _VecType>

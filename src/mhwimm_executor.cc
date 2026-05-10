@@ -43,37 +43,12 @@ namespace mhwimm_executor_ns {
 #define ERROR_MSG_NOMODINS "error: No mod been installed."
 #define ERROR_MSG_MODCONFLICT "error: Mod conflict detected."
 
-  /* calculate_key - do sum of characters in a string */
-  static int32_t calculate_key(const char *cmd_str)
-  {
-    if (!cmd_str)
-      return 0;
-    int32_t result(0);
-    while (*cmd_str) {
-      result += *cmd_str++;
-    }
-    return result;
-  }
-
   /**
    * parseCMD - method to parse command from user input,and registers the
    *            command,stores command parameters in internal data members
    */
   int mhwimm_executor::parseCMD(const std::string &cmd_string) noexcept
   {
-
-#define CD_CMD_KEY 199
-#define PWD_CMD_KEY 331
-#define LS_CMD_KEY 223
-#define INSTALL_CMD_KEY 759
-#define UNINSTALL_CMD_KEY 986
-#define INSTALLED_CMD_KEY 960
-#define GET_CONFIG_CMD_KEY 1045
-#define CONFIG_CMD_KEY 630
-#define EXIT_CMD_KEY 442
-#define COMMANDS_CMD_KEY 850
-#define HELP_CMD_KEY 425
-
     current_status_ = mhwimm_executor_status::WORKING;
     
     char *cmd_tmp_buf(nullptr);
@@ -93,7 +68,7 @@ namespace mhwimm_executor_ns {
     // first strtok()
     const char *arg(strtok(cmd_tmp_buf, " "));
 
-    switch (calculate_key(arg)) {
+    switch (__testCMD(arg)) {
     case EXIT_CMD_KEY:
       setCMD(mhwimm_executor_cmd::EXIT);
       break;
@@ -134,18 +109,6 @@ namespace mhwimm_executor_ns {
     while ((arg = strtok(NULL, " "))) {
       parameters_[nparams_++] = arg;
     }
-
-#undef CD_CMD_KEY
-#undef PWD_CMD_KEY
-#undef LS_CMD_KEY
-#undef INSTALL_CMD_KEY
-#undef UNINSTALL_CMD_KEY
-#undef INSTALLED_CMD_KEY
-#undef GET_CONFIG_CMD_KEY
-#undef CONFIG_CMD_KEY
-#undef EXIT_CMD_KEY
-#undef COMMANDS_CMD_KEY
-#undef HELP_CMD_KEY
 
     current_status_ = mhwimm_executor_status::IDLE;
     delete[] cmd_tmp_buf;
@@ -216,7 +179,8 @@ namespace mhwimm_executor_ns {
       generic_err_msg_output(ERROR_MSG_UNKNOWNCMD);
       return -1;
     }
-
+    
+  /* unsued label,used as mark */
   err_syntax:
     generic_err_msg_output(ERROR_MSG_ERRFORM);
     current_status_ = mhwimm_executor_status::ERROR;
@@ -323,22 +287,18 @@ namespace mhwimm_executor_ns {
   /* get_config - get the value of a config option */
   int mhwimm_executor::get_config(void) noexcept
   {
-#define CONFIG_USERHOME 616
-#define CONFIG_MHWIROOT 633
-#define CONFIG_MHWIMMROOT 787
-
     current_status_ = mhwimm_executor_status::WORKING;
     const auto &key(parameters_[0]);
     typename mhwimm_config_ns::get_config_traits<mhwimm_config_ns::config_t>::skey_t s;
 
-    switch (calculate_key(key.c_str())) {
-    case CONFIG_USERHOME:
+    switch (__testConfig(key.c_str())) {
+    case CONFIG_USERHOME_KEY:
       s = conf_->userhome;
       break;
-    case CONFIG_MHWIROOT:
+    case CONFIG_MHWIROOT_KEY:
       s = conf_->mhwiroot;
       break;
-    case CONFIG_MHWIMMROOT:
+    case CONFIG_MHWIMMROOT_KEY:
       s = conf_->mhwimmroot;
       break;
     default:
@@ -363,18 +323,18 @@ namespace mhwimm_executor_ns {
     const auto &key(parameters_[0]);
     const auto &val(parameters_[1]);
 
-    switch (calculate_key(key.c_str())) {
-    case CONFIG_USERHOME:
+    switch (__testConfig(key.c_str())) {
+    case CONFIG_USERHOME_KEY:
       conf_->userhome = static_cast<typename
                                     mhwimm_config_ns::get_config_traits<
                                       mhwimm_config_ns::config_t>::skey_t>(val);
       break;
-    case CONFIG_MHWIROOT:
+    case CONFIG_MHWIROOT_KEY:
       conf_->mhwiroot = static_cast<typename
                                     mhwimm_config_ns::get_config_traits<
                                       mhwimm_config_ns::config_t>::skey_t>(val);
       break;
-    case CONFIG_MHWIMMROOT:
+    case CONFIG_MHWIMMROOT_KEY:
       conf_->mhwimmroot = static_cast<typename
                                        mhwimm_config_ns::get_config_traits<
                                          mhwimm_config_ns::config_t>::skey_t>(val);
@@ -387,10 +347,6 @@ namespace mhwimm_executor_ns {
 
     current_status_ = mhwimm_executor_status::IDLE;
     return 0;
-
-#undef CONFIG_USERHOME
-#undef CONFIG_MHWIROOT
-#undef CONFIG_MHWIMMROOT
   }
 
   /**

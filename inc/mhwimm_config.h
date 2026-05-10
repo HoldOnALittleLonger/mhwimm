@@ -31,14 +31,14 @@ namespace mhwimm_config_ns {
 
   template<typename _MType>
   struct config_struct_traits<const _MType *> {
-    typedef const _MType::config_string_key_type * skey_t;
-    typedef const _MType::config_number_key_type * nkey_t;
+    typedef const typename _MType::config_string_key_type * skey_t;
+    typedef const typename _MType::config_number_key_type * nkey_t;
   };
 
   template<typename _MType>
   struct config_struct_traits<_MType *> {
-    typedef _MType::config_string_key_type * skey_t;
-    typedef _MType::config_number_key_type * nkey_t;
+    typedef typename _MType::config_string_key_type * skey_t;
+    typedef typename _MType::config_number_key_type * nkey_t;
   };
 
   /**
